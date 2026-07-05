@@ -272,6 +272,38 @@ describe("computeStats", () => {
     const statsLogged = computeStats(cls, logs, "2026-07-11");
     expect(statsLogged.unmarkedDays).not.toContain("2026-07-11");
   });
+
+  it("a HOLIDAY-typed log on a seeded holiday date contributes nothing", () => {
+    const cls = makeClass({ holidays: [{ date: "2026-07-10", name: "Test Holiday" }] });
+    const logs: IDayLog[] = [dayLog({ date: "2026-07-10", followedWeekday: "FRI", dayType: "HOLIDAY" })];
+    const stats = computeStats(cls, logs, "2026-07-10");
+    expect(stats.totalOccurred).toBe(0);
+    expect(stats.totalAttended).toBe(0);
+    expect(stats.perSubject).toEqual({});
+  });
+
+  it("a normal log on an overridden Saturday contributes fully, even with no matching override present", () => {
+    // dayOrderOverrides is deliberately empty — computeStats reads
+    // log.followedWeekday directly and must never consult the override
+    // list, since it's a shared, mutable, class-level resource that can be
+    // cleared by another class member's own revert independent of this log.
+    const cls = makeClass({ dayOrderOverrides: [] });
+    const logs: IDayLog[] = [
+      dayLog({
+        date: "2026-07-11", // a Saturday
+        followedWeekday: "WED",
+        periods: [p(1, "W1", "PRESENT"), p(2, "W2", "ABSENT"), p(3, "MENTOR", "PRESENT")],
+      }),
+    ];
+    const stats = computeStats(cls, logs, "2026-07-11");
+    // WED timetable: 2 counted periods (MENTOR excluded) -> 1 present, 1 absent.
+    expect(stats.totalOccurred).toBe(2);
+    expect(stats.totalAttended).toBe(1);
+    expect(stats.perSubject).toEqual({
+      W1: { occurred: 1, attended: 1, percentage: 100 },
+      W2: { occurred: 1, attended: 0, percentage: 0 },
+    });
+  });
 });
 
 // ---- computeBunkBudget ---------------------------------------------------

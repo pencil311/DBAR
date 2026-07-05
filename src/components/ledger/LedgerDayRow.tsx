@@ -2,13 +2,7 @@ import Link from "next/link";
 import { FlavorText, Stamp } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatDisplayDate } from "@/lib/dates";
-
-export type LedgerDayKind =
-  | { kind: "weekend" }
-  | { kind: "holiday"; name: string | null }
-  | { kind: "unfiled" }
-  | { kind: "full_absent" }
-  | { kind: "normal"; present: number; absent: number; od: number; cancelled: number };
+import type { LedgerDayKind } from "@/lib/ledgerClassify";
 
 export interface LedgerDayRowProps {
   date: string;

@@ -16,7 +16,7 @@ const NATURAL_WEEKDAY_BY_JS_DAY: Record<number, Weekday | null> = {
   6: null, // Saturday
 };
 
-function naturalWeekdayFor(date: string): Weekday | null {
+export function naturalWeekdayFor(date: string): Weekday | null {
   const parsed = new Date(`${date}T00:00:00Z`);
   return NATURAL_WEEKDAY_BY_JS_DAY[parsed.getUTCDay()] ?? null;
 }
@@ -53,4 +53,40 @@ export function getExpectedDay(cls: IClass, date: string): ExpectedDay | null {
   }
 
   return { followedWeekday, periods };
+}
+
+export interface ResolvedMarkDay {
+  followedWeekday: Weekday | null;
+  periods: IPeriod[];
+  isNonSchoolDay: boolean;
+}
+
+/**
+ * Resolves which weekday's timetable governs `date` for the mark screen,
+ * giving an existing DayLog's own stored `followedWeekday` absolute
+ * priority over `cls.dayOrderOverrides` — the override list is a
+ * class-wide, shared, mutable resource (any member logging or reverting a
+ * working day edits it), so a specific log's own record of what it was
+ * filed against must never be reconstructed from it. Without a log, falls
+ * back to `getExpectedDay` (override/holiday-aware) exactly as before,
+ * since there's nothing more authoritative to consult yet.
+ *
+ * `isNonSchoolDay` is true whenever this date wouldn't naturally have
+ * school (a weekend, or a declared holiday) — independent of any override
+ * — and is what the mark screen uses to decide whether to show the
+ * "Working X — running Y timetable" banner.
+ */
+export function resolveMarkDay(
+  cls: IClass,
+  date: string,
+  loggedFollowedWeekday: Weekday | null
+): ResolvedMarkDay {
+  const naturalWeekday = naturalWeekdayFor(date);
+  const isHoliday = cls.holidays.some((h) => h.date === date);
+  const isNonSchoolDay = naturalWeekday === null || isHoliday;
+
+  const followedWeekday = loggedFollowedWeekday ?? getExpectedDay(cls, date)?.followedWeekday ?? null;
+  const periods = followedWeekday ? (cls.timetable[followedWeekday] ?? []) : [];
+
+  return { followedWeekday, periods, isNonSchoolDay };
 }

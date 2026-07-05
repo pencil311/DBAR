@@ -15,6 +15,7 @@ import type { DayType, PeriodStatus } from "@/lib/models/DayLog";
 
 export interface ExistingLogSummary {
   dayType: DayType;
+  followedWeekday: Weekday | null;
   periods: { periodNo: number; status: PeriodStatus }[];
 }
 
@@ -23,7 +24,8 @@ interface MarkDayClientProps {
   timetable: Timetable;
   expected: { followedWeekday: Weekday; periods: IPeriod[] } | null;
   existingLog: ExistingLogSummary | null;
-  isOverrideDay: boolean;
+  /** True when this date wouldn't naturally have school (weekend or declared holiday). */
+  isNonSchoolDay: boolean;
   holidayName: string | null;
 }
 
@@ -66,12 +68,16 @@ export function MarkDayClient({
   timetable,
   expected,
   existingLog,
-  isOverrideDay,
+  isNonSchoolDay,
   holidayName,
 }: MarkDayClientProps) {
   const [mode, setMode] = useState<Mode>(existingLog ? "marked" : expected ? "form" : "noschool");
+  // The log's own stored followedWeekday is authoritative and always wins —
+  // never fall back to `expected` (override-derived) when a log exists, so
+  // an existing filing stays fully editable even if the class's shared
+  // dayOrderOverride for this date is later removed by someone else.
   const [workingDayWeekday, setWorkingDayWeekday] = useState<Weekday | null>(
-    isOverrideDay ? (expected?.followedWeekday ?? null) : null
+    isNonSchoolDay ? (existingLog?.followedWeekday ?? expected?.followedWeekday ?? null) : null
   );
 
   const activePeriods = useMemo(
@@ -104,7 +110,11 @@ export function MarkDayClient({
   useEffect(() => {
     const queued = getQueuedFiling(date);
     if (queued && !existingLog) {
-      setSavedSummary({ dayType: queued.dayType, periods: queued.periods });
+      setSavedSummary({
+        dayType: queued.dayType,
+        followedWeekday: queued.overrideWeekday ?? expected?.followedWeekday ?? null,
+        periods: queued.periods,
+      });
       setPendingWire(true);
       setMode("marked");
     } else {
@@ -206,18 +216,23 @@ export function MarkDayClient({
       periods: payloadPeriods,
       ...(workingDayWeekday ? { overrideWeekday: workingDayWeekday } : {}),
     };
+    const filedFollowedWeekday = workingDayWeekday ?? expected?.followedWeekday ?? null;
 
     startSaving(async () => {
       try {
         await saveDayLog(date, payload);
-        setSavedSummary({ dayType: pendingDayType, periods: payloadPeriods });
+        setSavedSummary({ dayType: pendingDayType, followedWeekday: filedFollowedWeekday, periods: payloadPeriods });
         setPendingWire(false);
         setMode("marked");
       } catch (err) {
         const isNetworkError = err instanceof TypeError || !navigator.onLine;
         if (isNetworkError) {
           queueFiling(date, payload);
-          setSavedSummary({ dayType: pendingDayType, periods: payloadPeriods });
+          setSavedSummary({
+            dayType: pendingDayType,
+            followedWeekday: filedFollowedWeekday,
+            periods: payloadPeriods,
+          });
           setPendingWire(true);
           setMode("marked");
         } else {

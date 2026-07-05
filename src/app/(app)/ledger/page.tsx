@@ -2,39 +2,12 @@ import { getServerAuthSession } from "@/lib/auth";
 import { connectToDatabase } from "@/lib/db";
 import { Class } from "@/lib/models/Class";
 import { DayLog } from "@/lib/models/DayLog";
-import { getExpectedDay } from "@/lib/schedule";
 import { enumerateDates, formatShortDate, todayIST } from "@/lib/dates";
 import { groupByWeek } from "@/lib/weekGrouping";
-import { tallyDayPeriodsDetailed } from "@/lib/dayTally";
+import { classifyDay } from "@/lib/ledgerClassify";
 import { Heading, FlavorText } from "@/components/ui";
 import { NoClassMessage } from "@/components/NoClassMessage";
-import { LedgerDayRow, type LedgerDayKind } from "@/components/ledger/LedgerDayRow";
-import type { IClass } from "@/lib/models/Class";
-import type { IDayLog } from "@/lib/models/DayLog";
-
-function classifyDay(cls: IClass, log: IDayLog | undefined, date: string): LedgerDayKind {
-  if (log) {
-    if (log.dayType === "HOLIDAY") {
-      const holidayName = cls.holidays.find((h) => h.date === date)?.name ?? null;
-      return { kind: "holiday", name: holidayName };
-    }
-    if (log.dayType === "FULL_ABSENT") {
-      return { kind: "full_absent" };
-    }
-    const dayPeriods = cls.timetable[log.followedWeekday] ?? [];
-    const { present, absent, od, cancelled } = tallyDayPeriodsDetailed(dayPeriods, log.periods);
-    return { kind: "normal", present, absent, od, cancelled };
-  }
-
-  const expected = getExpectedDay(cls, date);
-  if (!expected) {
-    const holidayName = cls.holidays.find((h) => h.date === date)?.name ?? null;
-    if (holidayName) return { kind: "holiday", name: holidayName };
-    return { kind: "weekend" };
-  }
-
-  return { kind: "unfiled" };
-}
+import { LedgerDayRow } from "@/components/ledger/LedgerDayRow";
 
 export default async function LedgerPage() {
   const session = await getServerAuthSession();

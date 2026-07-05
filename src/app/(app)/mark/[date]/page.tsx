@@ -2,7 +2,7 @@ import { getServerAuthSession } from "@/lib/auth";
 import { connectToDatabase } from "@/lib/db";
 import { Class } from "@/lib/models/Class";
 import { DayLog } from "@/lib/models/DayLog";
-import { getExpectedDay, isSemesterDay } from "@/lib/schedule";
+import { isSemesterDay, resolveMarkDay } from "@/lib/schedule";
 import { computeStats } from "@/lib/engine";
 import { formatDisplayDate, isValidDateString, todayIST } from "@/lib/dates";
 import { applyElectiveDisplay } from "@/lib/electiveDisplay";
@@ -52,13 +52,20 @@ export default async function MarkDatePage({ params }: PageProps) {
   }
 
   const userId = session.user.id;
-  const expected = getExpectedDay(cls, date);
-  const isOverrideDay = cls.dayOrderOverrides.some((o) => o.date === date);
 
   const [existingLogDoc, allLogs] = await Promise.all([
     DayLog.findOne({ userId, date }).lean(),
     DayLog.find({ userId }).lean(),
   ]);
+
+  // A DayLog's own stored followedWeekday always wins over the class's
+  // shared dayOrderOverrides — see resolveMarkDay for why.
+  const { followedWeekday, periods, isNonSchoolDay } = resolveMarkDay(
+    cls,
+    date,
+    existingLogDoc?.followedWeekday ?? null
+  );
+  const expected = followedWeekday ? { followedWeekday, periods } : null;
 
   const today = todayIST();
   const stats = computeStats(cls, allLogs, today);
@@ -67,6 +74,7 @@ export default async function MarkDatePage({ params }: PageProps) {
   const existingLog: ExistingLogSummary | null = existingLogDoc
     ? {
         dayType: existingLogDoc.dayType,
+        followedWeekday: existingLogDoc.followedWeekday,
         periods: existingLogDoc.periods.map((p) => ({ periodNo: p.periodNo, status: p.status })),
       }
     : null;
@@ -94,7 +102,7 @@ export default async function MarkDatePage({ params }: PageProps) {
         timetable={displayTimetable}
         expected={displayExpected}
         existingLog={existingLog}
-        isOverrideDay={isOverrideDay}
+        isNonSchoolDay={isNonSchoolDay}
         holidayName={holidayName}
       />
     </main>
