@@ -5,7 +5,7 @@ import { tallyDayPeriodsDetailed } from "@/lib/dayTally";
 
 export type LedgerDayKind =
   | { kind: "weekend" }
-  | { kind: "holiday"; name: string | null }
+  | { kind: "holiday"; name: string | null; filed: boolean }
   | { kind: "unfiled" }
   | { kind: "full_absent" }
   | { kind: "normal"; present: number; absent: number; od: number; cancelled: number };
@@ -17,12 +17,16 @@ export type LedgerDayKind =
  * `dayOrderOverrides`, so a filed day stays correctly classified (and thus
  * linkable/editable) even if that override is later removed by another
  * class member reverting their own working day on the same date.
+ *
+ * Every kind here is a legitimate link target for the ledger, filed or
+ * not — an unfiled weekend/holiday's mark page still offers the "Court in
+ * session?" action, so there's always somewhere useful to land.
  */
 export function classifyDay(cls: IClass, log: IDayLog | undefined, date: string): LedgerDayKind {
   if (log) {
     if (log.dayType === "HOLIDAY") {
       const holidayName = cls.holidays.find((h) => h.date === date)?.name ?? null;
-      return { kind: "holiday", name: holidayName };
+      return { kind: "holiday", name: holidayName, filed: true };
     }
     if (log.dayType === "FULL_ABSENT") {
       return { kind: "full_absent" };
@@ -35,7 +39,7 @@ export function classifyDay(cls: IClass, log: IDayLog | undefined, date: string)
   const expected = getExpectedDay(cls, date);
   if (!expected) {
     const holidayName = cls.holidays.find((h) => h.date === date)?.name ?? null;
-    if (holidayName) return { kind: "holiday", name: holidayName };
+    if (holidayName) return { kind: "holiday", name: holidayName, filed: false };
     return { kind: "weekend" };
   }
 

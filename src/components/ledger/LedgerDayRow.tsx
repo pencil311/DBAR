@@ -11,25 +11,17 @@ export interface LedgerDayRowProps {
 }
 
 export function LedgerDayRow({ date, info, isToday }: LedgerDayRowProps) {
-  const row = (
-    <div
-      className={cn(
-        "flex items-center justify-between gap-2 border-b border-l-4 border-border-dark py-2 pl-3 pr-2",
-        isToday ? "border-l-brass" : "border-l-transparent"
-      )}
-    >
-      <span className="font-ledger text-sm text-ink">{formatDisplayDate(date)}</span>
-      <RightSide info={info} />
-    </div>
-  );
-
-  if (info.kind === "weekend") {
-    return row;
-  }
-
   return (
     <Link href={`/mark/${date}`} className="block">
-      {row}
+      <div
+        className={cn(
+          "flex items-center justify-between gap-2 border-b border-l-4 border-border-dark py-2 pl-3 pr-2 transition-colors hover:bg-paper-dark",
+          isToday ? "border-l-brass" : "border-l-transparent"
+        )}
+      >
+        <span className="font-ledger text-sm text-ink">{formatDisplayDate(date)}</span>
+        <RightSide info={info} />
+      </div>
     </Link>
   );
 }
@@ -39,7 +31,16 @@ function RightSide({ info }: { info: LedgerDayKind }) {
     case "weekend":
       return <span className="font-ledger text-sm text-ink-muted">—</span>;
     case "holiday":
-      return <FlavorText className="text-sm">{info.name ?? "Holiday"}</FlavorText>;
+      return (
+        <div className="flex items-center gap-2">
+          <FlavorText className="text-sm">{info.name ?? "Holiday"}</FlavorText>
+          {info.filed && (
+            <Stamp variant="ink" className="!border-ink-muted !px-2 !py-0.5 text-xs !text-ink-muted">
+              Filed
+            </Stamp>
+          )}
+        </div>
+      );
     case "unfiled":
       return (
         <Stamp variant="blood" className="!px-2 !py-0.5 text-xs">

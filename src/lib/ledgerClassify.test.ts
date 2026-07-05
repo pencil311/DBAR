@@ -46,8 +46,17 @@ function dayLog(overrides: Partial<IDayLog> = {}): IDayLog {
   } as IDayLog;
 }
 
+/**
+ * LedgerDayRow wraps every row in a <Link> unconditionally now — there is
+ * no branch on `kind` left in that component to regress. The meaningful
+ * regression surface here is that `classifyDay` keeps returning a correct,
+ * well-formed kind for every case the ledger has to render (including
+ * "weekend", which used to be the one kind LedgerDayRow special-cased as
+ * non-linking) — a wrong or missing kind is the only way a row could ever
+ * fail to render/link correctly again.
+ */
 describe("classifyDay", () => {
-  it("classifies a logged working Saturday as normal even with no matching override", () => {
+  it("classifies a logged working Saturday as normal — links via P/A stats, even with no matching override", () => {
     // No dayOrderOverrides at all — same "override went missing" state the
     // mark screen has to survive; the ledger reads log.followedWeekday
     // directly and was never vulnerable to this in the first place.
@@ -66,10 +75,16 @@ describe("classifyDay", () => {
     });
   });
 
-  it("classifies a HOLIDAY-typed log as holiday regardless of schedule state", () => {
+  it("classifies a HOLIDAY-typed log as a filed holiday, regardless of schedule state or date", () => {
     const cls = makeClass({ holidays: [{ date: "2026-07-31", name: "St Ignatius" }] });
     const log = dayLog({ date: "2026-07-31", dayType: "HOLIDAY", followedWeekday: "FRI", periods: [] });
-    expect(classifyDay(cls, log, "2026-07-31")).toEqual({ kind: "holiday", name: "St Ignatius" });
+    expect(classifyDay(cls, log, "2026-07-31")).toEqual({ kind: "holiday", name: "St Ignatius", filed: true });
+  });
+
+  it("classifies a HOLIDAY-typed log filed on a plain weekend (not a declared holiday) as filed with no name", () => {
+    const cls = makeClass({ holidays: [] });
+    const log = dayLog({ date: "2026-07-04", dayType: "HOLIDAY", followedWeekday: "MON", periods: [] });
+    expect(classifyDay(cls, log, "2026-07-04")).toEqual({ kind: "holiday", name: null, filed: true });
   });
 
   it("classifies a FULL_ABSENT log regardless of schedule state", () => {
@@ -83,13 +98,17 @@ describe("classifyDay", () => {
     expect(classifyDay(cls, undefined, "2026-07-06")).toEqual({ kind: "unfiled" }); // Monday
   });
 
-  it("classifies an unfiled true weekend as weekend", () => {
+  it("classifies an untouched weekend as weekend — still a valid, linkable kind", () => {
     const cls = makeClass();
     expect(classifyDay(cls, undefined, "2026-07-04")).toEqual({ kind: "weekend" }); // Saturday
   });
 
-  it("classifies an unfiled declared holiday as holiday", () => {
+  it("classifies an unfiled declared holiday as an unfiled holiday", () => {
     const cls = makeClass({ holidays: [{ date: "2026-07-31", name: "St Ignatius" }] });
-    expect(classifyDay(cls, undefined, "2026-07-31")).toEqual({ kind: "holiday", name: "St Ignatius" });
+    expect(classifyDay(cls, undefined, "2026-07-31")).toEqual({
+      kind: "holiday",
+      name: "St Ignatius",
+      filed: false,
+    });
   });
 });
