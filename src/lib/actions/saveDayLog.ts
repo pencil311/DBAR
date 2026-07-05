@@ -167,3 +167,29 @@ export async function revertWorkingDay(date: string): Promise<void> {
 
   revalidatePath(`/mark/${date}`);
 }
+
+/**
+ * Withdraws the signed-in user's own filing for `date` — deletes the
+ * DayLog and nothing else. Deliberately leaves the class's shared
+ * dayOrderOverrides untouched: "I want to take back what I filed" is a
+ * different action from "this was never a working day" (revertWorkingDay,
+ * above) — withdrawing your own filing on a working Saturday shouldn't
+ * retroactively un-declare that Saturday as a working day for the rest of
+ * the class. The delete is already scoped to this user's own DayLog, so
+ * there's no separate ownership check to make.
+ */
+export async function deleteDayLog(date: string): Promise<void> {
+  const session = await getServerAuthSession();
+  if (!session?.user) {
+    throw new Error("Not authenticated");
+  }
+
+  if (!isValidDateString(date)) {
+    throw new Error("Invalid date");
+  }
+
+  await connectToDatabase();
+  await DayLog.deleteOne({ userId: session.user.id, date });
+
+  revalidatePath(`/mark/${date}`);
+}

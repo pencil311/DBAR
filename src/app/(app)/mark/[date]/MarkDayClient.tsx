@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Heading, FlavorText, PosterFrame, Stamp } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { saveDayLog, revertWorkingDay, type SaveDayLogPayload } from "@/lib/actions/saveDayLog";
+import { saveDayLog, revertWorkingDay, deleteDayLog, type SaveDayLogPayload } from "@/lib/actions/saveDayLog";
 import { groupPeriods, type PeriodGroup } from "@/lib/periodGroups";
 import { PeriodChip, STATUS_LABEL } from "@/components/mark/PeriodChip";
 import { fullWeekdayName } from "@/lib/dates";
 import { tallyDayPeriods } from "@/lib/dayTally";
 import { WEEKDAYS, type Weekday } from "@/lib/weekday";
-import { getQueuedFiling, queueFiling, QUEUE_SYNCED_EVENT } from "@/lib/offlineQueue";
+import { getQueuedFiling, queueFiling, removeQueuedFiling, QUEUE_SYNCED_EVENT } from "@/lib/offlineQueue";
 import type { IPeriod, Timetable } from "@/lib/models/Class";
 import type { DayType, PeriodStatus } from "@/lib/models/DayLog";
 
@@ -96,6 +96,8 @@ export function MarkDayClient({
   const [error, setError] = useState<string | null>(null);
   const [isSaving, startSaving] = useTransition();
   const [isReverting, startReverting] = useTransition();
+  const [isTearingUp, startTearingUp] = useTransition();
+  const [confirmingTearUp, setConfirmingTearUp] = useState(false);
   const [pendingWire, setPendingWire] = useState(false);
   const [announcement, setAnnouncement] = useState("");
 
@@ -197,6 +199,26 @@ export function MarkDayClient({
         setMode("noschool");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not revert. Try again.");
+      }
+    });
+  }
+
+  function handleTearUp() {
+    setError(null);
+    startTearingUp(async () => {
+      try {
+        await deleteDayLog(date);
+        removeQueuedFiling(date);
+        const nextWeekday = isNonSchoolDay ? (expected?.followedWeekday ?? null) : null;
+        setConfirmingTearUp(false);
+        setSavedSummary(null);
+        setPendingWire(false);
+        setWorkingDayWeekday(nextWeekday);
+        setStatuses(defaultStatuses(expected?.periods ?? [], null));
+        setPendingDayType("NORMAL");
+        setMode(expected ? "form" : "noschool");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not tear up the filing. Try again.");
       }
     });
   }
@@ -347,11 +369,45 @@ export function MarkDayClient({
                 Pending Wire — will file when back on the grid
               </Stamp>
             )}
-            <button type="button" onClick={handleEdit}>
-              <Stamp variant="ink" className="transition-colors hover:border-blood hover:text-blood">
-                Edit
-              </Stamp>
-            </button>
+
+            {confirmingTearUp ? (
+              <div className="flex w-full flex-col items-center gap-2 border-t border-dotted border-ink-muted pt-3">
+                <FlavorText className="text-center text-sm text-blood">
+                  Tear up this filing? The day returns to UNFILED and stops counting until re-filed.
+                </FlavorText>
+                <div className="flex gap-2">
+                  <button type="button" onClick={handleTearUp} disabled={isTearingUp}>
+                    <Stamp variant="blood" className="text-xs">
+                      {isTearingUp ? "Tearing Up..." : "Confirm — Tear It Up"}
+                    </Stamp>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingTearUp(false)}
+                    disabled={isTearingUp}
+                  >
+                    <Stamp variant="ink" className="text-xs">
+                      Cancel
+                    </Stamp>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button type="button" onClick={handleEdit}>
+                  <Stamp variant="ink" className="transition-colors hover:border-blood hover:text-blood">
+                    Edit
+                  </Stamp>
+                </button>
+                <button type="button" onClick={() => setConfirmingTearUp(true)}>
+                  <Stamp variant="ink" className="!border-ink-muted !text-ink-muted text-xs opacity-80">
+                    Tear Up the Filing
+                  </Stamp>
+                </button>
+              </div>
+            )}
+
+            {error && <FlavorText className="text-center text-sm text-blood">{error}</FlavorText>}
           </div>
         </PosterFrame>
       </div>

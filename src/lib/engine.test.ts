@@ -304,6 +304,44 @@ describe("computeStats", () => {
       W2: { occurred: 1, attended: 0, percentage: 0 },
     });
   });
+
+  it("tearing up a filing (deleting its log, leaving any override intact) makes the day reappear in unmarkedDays and drops its stats", () => {
+    // Mirrors deleteDayLog: only the DayLog goes away. The class-level
+    // override survives (tearing up your own filing is not "this wasn't a
+    // school day"), so a Monday keeps expecting a log, and an overridden
+    // Saturday keeps expecting one too.
+    const monday = makeClass();
+    const mondayLogs: IDayLog[] = [
+      dayLog({
+        date: "2026-07-06",
+        followedWeekday: "MON",
+        periods: [p(1, "M1", "PRESENT"), p(2, "M2", "PRESENT"), p(3, "M3", "PRESENT")],
+      }),
+    ];
+    const withLog = computeStats(monday, mondayLogs, "2026-07-06");
+    expect(withLog.unmarkedDays).not.toContain("2026-07-06");
+    expect(withLog.totalOccurred).toBe(3);
+
+    const afterTearUp = computeStats(monday, [], "2026-07-06"); // log removed
+    expect(afterTearUp.unmarkedDays).toContain("2026-07-06");
+    expect(afterTearUp.totalOccurred).toBe(0);
+
+    const overriddenSaturday = makeClass({
+      dayOrderOverrides: [{ date: "2026-07-11", followsWeekday: "WED", note: "user-logged working day" }],
+    });
+    const saturdayLogs: IDayLog[] = [
+      dayLog({
+        date: "2026-07-11",
+        followedWeekday: "WED",
+        periods: [p(1, "W1", "PRESENT"), p(2, "W2", "PRESENT"), p(3, "MENTOR", "PRESENT")],
+      }),
+    ];
+    const overriddenWithLog = computeStats(overriddenSaturday, saturdayLogs, "2026-07-11");
+    expect(overriddenWithLog.unmarkedDays).not.toContain("2026-07-11");
+
+    const overriddenAfterTearUp = computeStats(overriddenSaturday, [], "2026-07-11");
+    expect(overriddenAfterTearUp.unmarkedDays).toContain("2026-07-11"); // override alone still expects a log
+  });
 });
 
 // ---- computeBunkBudget ---------------------------------------------------

@@ -111,4 +111,16 @@ describe("classifyDay", () => {
       filed: false,
     });
   });
+
+  it("classifies a torn-up working Saturday (log deleted, override intact) as unfiled, not weekend", () => {
+    // This is exactly what deleteDayLog leaves behind: the DayLog is gone
+    // but the class-level dayOrderOverride survives (tearing up your own
+    // filing is deliberately not "this wasn't a school day" — that's
+    // revertWorkingDay). The date should still read as an outstanding
+    // filing, the same as any other unfiled working day.
+    const cls = makeClass({
+      dayOrderOverrides: [{ date: "2026-07-04", followsWeekday: "WED", note: "user-logged working day" }],
+    });
+    expect(classifyDay(cls, undefined, "2026-07-04")).toEqual({ kind: "unfiled" });
+  });
 });
