@@ -14,11 +14,11 @@ export function MarshalNotice({ days, dateLabel, showWarning }: MarshalNoticePro
         <StarBadge />
         <div className="flex flex-col gap-0.5">
           <p className="font-ledger text-sm uppercase tracking-wide text-ink">
-            The Marshal Rides In {days} Days — Attendance Verification, {dateLabel}
+            YOU HAVE {days} Days LEFT — Attendance Verification, {dateLabel}
           </p>
           {showWarning && (
             <p className="font-ledger text-xs uppercase tracking-wide text-blood">
-              Get your affairs in order.
+              Get your ATTENDANCE in order.
             </p>
           )}
         </div>
