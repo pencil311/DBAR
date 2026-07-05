@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    DBar monogram — hand-built from rectangles (ink strokes + paper-colored
+    counters), not font glyphs, so this file is self-contained and needs no
+    webfont at render time. "D" reads as a single-counter ring, "B" as the
+    same ring split by a crossbar into two counters.
+  -->
+  <rect width="512" height="512" fill="#e8dcc4" />
+
+  <rect x="20" y="20" width="472" height="472" fill="none" stroke="#2b1d12" stroke-width="12" />
+  <rect x="40" y="40" width="432" height="432" fill="none" stroke="#2b1d12" stroke-width="6" />
+
+  <!-- D -->
+  <g transform="translate(121,126)">
+    <rect x="0" y="0" width="120" height="260" fill="#2b1d12" />
+    <rect x="32" y="32" width="56" height="196" fill="#e8dcc4" />
+  </g>
+
+  <!-- B -->
+  <g transform="translate(271,126)">
+    <rect x="0" y="0" width="120" height="260" fill="#2b1d12" />
+    <rect x="32" y="32" width="56" height="90" fill="#e8dcc4" />
+    <rect x="32" y="138" width="56" height="90" fill="#e8dcc4" />
+  </g>
+</svg>

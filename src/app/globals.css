@@ -3,25 +3,47 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #e8dcc4;
+  --paper-dark: #d8c6a2;
+  --ink: #2b1d12;
+  --ink-faded: #4a3620;
+  --ink-muted: #6b5432;
+  --blood: #8b1a1a;
+  --brass: #9c7a2e;
+  --lawful: #3e5c2e;
+  --border-dark: #b09a72;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background-color: var(--paper);
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--ink);
+  background-color: var(--paper);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23grain)' opacity='0.07'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  font-family: var(--font-flavor), serif;
+  padding-top: env(safe-area-inset-top);
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+.no-callout {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+@keyframes ink-settle {
+  from {
+    opacity: 0;
+    transform: scale(1.03);
   }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-ink-settle {
+  animation: ink-settle 400ms ease-out;
 }

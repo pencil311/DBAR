@@ -1,101 +1,124 @@
-import Image from "next/image";
+import { getServerAuthSession } from "@/lib/auth";
+import { connectToDatabase } from "@/lib/db";
+import { Class } from "@/lib/models/Class";
+import { DayLog } from "@/lib/models/DayLog";
+import { getExpectedDay } from "@/lib/schedule";
+import {
+  computeBunkBudget,
+  computeStats,
+  honorScore,
+  posterState,
+  verificationCountdown,
+  VERIFICATION_DATES,
+} from "@/lib/engine";
+import { addDays, formatDisplayDate, todayIST } from "@/lib/dates";
+import { tallyDayPeriods } from "@/lib/dayTally";
+import { Heading } from "@/components/ui";
+import { NoClassMessage } from "@/components/NoClassMessage";
+import { UnfiledWarrantsStrip } from "@/components/mark/UnfiledWarrantsStrip";
+import { WantedPoster } from "@/components/poster/WantedPoster";
+import { HonorMeter } from "@/components/poster/HonorMeter";
+import { MarshalNotice } from "@/components/poster/MarshalNotice";
+import { type QuickDrawState } from "@/components/poster/QuickDraw";
+import { HomeQuickDraw } from "@/components/poster/HomeQuickDraw";
+import { HeaderSettingsLink } from "@/components/HeaderSettingsLink";
 
-export default function Home() {
+export default async function Home() {
+  const session = await getServerAuthSession();
+  if (!session?.user) {
+    return <NoClassMessage reason="before the county can judge you" />;
+  }
+
+  if (!session.user.classId) {
+    return <NoClassMessage reason="before the county can judge you" />;
+  }
+
+  await connectToDatabase();
+  const cls = await Class.findById(session.user.classId).lean();
+
+  if (!cls) {
+    return <NoClassMessage reason="before the county can judge you" />;
+  }
+
+  const allLogs = await DayLog.find({ userId: session.user.id }).lean();
+
+  const today = todayIST();
+  const stats = computeStats(cls, allLogs, today);
+  const budget = computeBunkBudget(stats);
+  const poster = posterState(stats.percentage);
+  const honor = honorScore(allLogs, today);
+  const countdown = verificationCountdown(today);
+  const warrants = stats.unmarkedDays.filter((d) => d < today);
+
+  const upcomingVerificationDate = [...VERIFICATION_DATES].filter((d) => d >= today).sort()[0] ?? null;
+
+  const sevenDaysAgo = addDays(today, -6);
+  const recentLogs = allLogs.filter((l) => l.date >= sevenDaysAgo && l.date <= today);
+  const bunkDays = recentLogs.filter(
+    (l) => l.dayType === "FULL_ABSENT" || l.periods.some((p) => p.status === "ABSENT")
+  ).length;
+  const honorFlavor =
+    bunkDays === 0
+      ? "A clean week's ride."
+      : `${bunkDays} bunk${bunkDays === 1 ? "" : "s"} this week. Your honor fades, partner.`;
+
+  const todayLog = allLogs.find((l) => l.date === today) ?? null;
+  const expectedToday = getExpectedDay(cls, today);
+
+  let quickDraw: QuickDrawState;
+  if (todayLog) {
+    let label: string;
+    if (todayLog.dayType === "HOLIDAY") {
+      label = "Holiday";
+    } else if (todayLog.dayType === "FULL_ABSENT") {
+      label = "Full Day Absent";
+    } else {
+      const dayPeriods = cls.timetable[todayLog.followedWeekday] ?? [];
+      const { present, absent } = tallyDayPeriods(dayPeriods, todayLog.periods);
+      label = `Present ${present} · Absent ${absent}`;
+    }
+    quickDraw = { kind: "filed", label };
+  } else if (!expectedToday) {
+    quickDraw = { kind: "noschool" };
+  } else {
+    quickDraw = { kind: "unfiled" };
+  }
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <main className="mx-auto flex max-w-xl flex-col gap-5 p-4 pb-8">
+      <header className="relative flex flex-col items-center gap-1 pt-4 text-center">
+        <div className="absolute right-0 top-4">
+          <HeaderSettingsLink />
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        <Heading size="xl" as="h1">
+          DBAR
+        </Heading>
+        <p className="font-ledger text-xs uppercase tracking-[0.2em] text-ink-muted">
+          County Attendance Register
+        </p>
+      </header>
+
+      <WantedPoster
+        poster={poster}
+        percentage={stats.percentage}
+        totalAttended={stats.totalAttended}
+        totalOccurred={stats.totalOccurred}
+        budget={budget}
+      />
+
+      <HonorMeter score={honor} flavorLine={honorFlavor} />
+
+      {countdown !== null && upcomingVerificationDate && (
+        <MarshalNotice
+          days={countdown}
+          dateLabel={formatDisplayDate(upcomingVerificationDate)}
+          showWarning={stats.percentage < 80}
+        />
+      )}
+
+      {warrants.length > 0 && <UnfiledWarrantsStrip dates={warrants} />}
+
+      <HomeQuickDraw today={today} state={quickDraw} />
+    </main>
   );
 }
