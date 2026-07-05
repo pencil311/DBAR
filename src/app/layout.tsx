@@ -25,6 +25,10 @@ const imFellEnglish = IM_Fell_English({
   style: ["normal", "italic"],
   variable: "--font-flavor",
   display: "swap",
+  // Next has no fallback-metric data for this font, so its automatic
+  // fallback-adjustment (size-adjust/ascent-override on the swapped-in
+  // system font) has nothing to compute from and just warns on every build.
+  adjustFontFallback: false,
 });
 
 export const metadata: Metadata = {

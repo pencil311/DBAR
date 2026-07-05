@@ -8,6 +8,7 @@ import { createClass } from "@/lib/actions/settings";
 import { type CreatePeriodInput } from "@/lib/classValidation";
 import { addDays, todayIST } from "@/lib/dates";
 import { WEEKDAYS, type Weekday } from "@/lib/weekday";
+import { cn } from "@/lib/cn";
 
 interface PeriodDraft {
   subjectCode: string;
@@ -218,12 +219,15 @@ export function ForgeOutfitForm({ onDone }: { onDone: () => void }) {
 
       <div className="flex gap-2">
         <button type="button" onClick={handleSubmit} disabled={isPending} className="flex-1">
-          <Stamp variant="ink" className="block w-full text-center disabled:opacity-50">
+          <Stamp variant="ink" className={cn("block w-full text-center", isPending && "opacity-50")}>
             {isPending ? "Forging..." : "Forge Outfit"}
           </Stamp>
         </button>
         <button type="button" onClick={onDone} disabled={isPending}>
-          <Stamp variant="ink" className="!border-ink-muted !text-ink-muted text-center disabled:opacity-50">
+          <Stamp
+            variant="ink"
+            className={cn("!border-ink-muted !text-ink-muted text-center", isPending && "opacity-50")}
+          >
             Cancel
           </Stamp>
         </button>

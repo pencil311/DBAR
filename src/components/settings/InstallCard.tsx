@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PosterFrame, Heading, FlavorText, Stamp } from "@/components/ui";
+import { cn } from "@/lib/cn";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -74,7 +75,7 @@ export function InstallCard() {
             Keep DBar a tap away — install it like a real app, no store required.
           </FlavorText>
           <button type="button" onClick={handleInstall} disabled={installing} className="mt-3">
-            <Stamp variant="brass" className="text-center disabled:opacity-50">
+            <Stamp variant="brass" className={cn("text-center", installing && "opacity-50")}>
               {installing ? "Saddling Up..." : "Install DBar"}
             </Stamp>
           </button>

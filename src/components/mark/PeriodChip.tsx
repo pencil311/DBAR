@@ -7,7 +7,7 @@ import type { PeriodStatus } from "@/lib/models/DayLog";
 
 const LONG_PRESS_MS = 500;
 
-const STATUS_LABEL: Record<PeriodStatus, string> = {
+export const STATUS_LABEL: Record<PeriodStatus, string> = {
   PRESENT: "Present",
   ABSENT: "Absent",
   OD: "OD",

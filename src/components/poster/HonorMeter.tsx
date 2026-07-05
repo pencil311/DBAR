@@ -45,7 +45,7 @@ export function HonorMeter({ score, flavorLine }: HonorMeterProps) {
 
       <MeterTrack percent={displayScore} colorClass={fillColorClass(score)} className="mt-4">
         <div
-          className="absolute top-1/2 -translate-y-1/2 transition-[left] duration-300 ease-out"
+          className="meter-hat absolute top-1/2 -translate-y-1/2 transition-[left] duration-300 ease-out"
           style={{ left: `calc(${displayScore}% - ${HAT_WIDTH / 2}px)` }}
         >
           <CowboyHat size={HAT_WIDTH} />

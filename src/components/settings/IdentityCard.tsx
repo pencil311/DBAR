@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { signOut } from "next-auth/react";
 import { Heading, PosterFrame, Stamp } from "@/components/ui";
+import { cn } from "@/lib/cn";
 
 export interface IdentityCardProps {
   name: string;
@@ -10,6 +12,13 @@ export interface IdentityCardProps {
 }
 
 export function IdentityCard({ name, email, image }: IdentityCardProps) {
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  function handleSignOut() {
+    setIsSigningOut(true);
+    signOut({ callbackUrl: "/login" });
+  }
+
   return (
     <PosterFrame>
       <div className="flex items-center gap-3">
@@ -28,9 +37,14 @@ export function IdentityCard({ name, email, image }: IdentityCardProps) {
           <span className="truncate font-ledger text-sm text-ink-muted">{email}</span>
         </div>
       </div>
-      <button type="button" onClick={() => signOut({ callbackUrl: "/login" })} className="mt-3 block w-full">
-        <Stamp variant="blood" className="block w-full text-center">
-          Ride Out — Sign Out
+      <button
+        type="button"
+        onClick={handleSignOut}
+        disabled={isSigningOut}
+        className="mt-3 block w-full"
+      >
+        <Stamp variant="blood" className={cn("block w-full text-center", isSigningOut && "opacity-50")}>
+          {isSigningOut ? "Riding Out..." : "Ride Out — Sign Out"}
         </Stamp>
       </button>
     </PosterFrame>

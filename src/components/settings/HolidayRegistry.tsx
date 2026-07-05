@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FlavorText, Stamp } from "@/components/ui";
 import { addHoliday, removeHoliday } from "@/lib/actions/settings";
 import { formatDisplayDate } from "@/lib/dates";
+import { cn } from "@/lib/cn";
 
 export interface HolidayEntry {
   date: string;
@@ -70,11 +71,11 @@ export function HolidayRegistry({ classId, holidays }: HolidayRegistryProps) {
             <button
               type="button"
               onClick={() => handleRemove(h.date)}
-              disabled={isPending && removingDate === h.date}
+              disabled={isPending}
               aria-label={`Remove ${h.name}`}
               className="shrink-0 font-ledger text-blood disabled:opacity-50"
             >
-              ✕
+              {removingDate === h.date ? "..." : "✕"}
             </button>
           </div>
         ))
@@ -95,8 +96,11 @@ export function HolidayRegistry({ classId, holidays }: HolidayRegistryProps) {
           className="flex-1 border border-ink bg-paper px-2 py-1 font-ledger text-sm"
         />
         <button type="button" onClick={handleAdd} disabled={isPending || !date || !name.trim()}>
-          <Stamp variant="ink" className="block w-full text-center text-xs disabled:opacity-50 sm:w-auto">
-            Add
+          <Stamp
+            variant="ink"
+            className={cn("block w-full text-center text-xs sm:w-auto", isPending && "opacity-50")}
+          >
+            {isPending && removingDate === null ? "Adding..." : "Add"}
           </Stamp>
         </button>
       </div>

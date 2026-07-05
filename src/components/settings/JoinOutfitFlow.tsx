@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { FlavorText, Stamp } from "@/components/ui";
 import { assignClassToUser } from "@/lib/actions/assignClass";
+import { cn } from "@/lib/cn";
 
 export interface JoinableClass {
   id: string;
@@ -66,8 +67,8 @@ export function JoinOutfitFlow({ classes, currentClassId, onDone }: JoinOutfitFl
               </span>
             </div>
             <button type="button" onClick={() => selectRow(c.id)} disabled={isJoining}>
-              <Stamp variant="ink" className="text-xs">
-                Join
+              <Stamp variant="ink" className={cn("text-xs", isJoining && "opacity-50")}>
+                {isJoining && !currentClassId ? "Joining..." : "Join"}
               </Stamp>
             </button>
           </div>

@@ -16,7 +16,7 @@ export function MeterTrack({ percent, colorClass, className, children }: MeterTr
   return (
     <div className={cn("relative h-3 w-full border border-border-dark bg-paper-dark", className)}>
       <div
-        className={cn("h-full transition-[width] duration-300 ease-out", colorClass)}
+        className={cn("meter-fill h-full transition-[width] duration-300 ease-out", colorClass)}
         style={{ width: `${clamped}%` }}
       />
       {children}

@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Heading, FlavorText, PosterFrame, Stamp } from "@/components/ui";
 import { setElective } from "@/lib/actions/settings";
+import { cn } from "@/lib/cn";
 
 type Elective = "AE" | "FSWD";
 
@@ -49,9 +50,9 @@ export function ElectiveCard({ elective }: ElectiveCardProps) {
           <button key={opt.value} type="button" onClick={() => choose(opt.value)} disabled={isPending}>
             <Stamp
               variant={current === opt.value ? "brass" : "ink"}
-              className="block w-full text-center disabled:opacity-50"
+              className={cn("block w-full text-center", isPending && "opacity-50")}
             >
-              {opt.label}
+              {isPending && current !== opt.value ? "Saving..." : opt.label}
             </Stamp>
           </button>
         ))}

@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { Heading, FlavorText, PosterFrame, Stamp } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { saveDayLog, revertWorkingDay, type SaveDayLogPayload } from "@/lib/actions/saveDayLog";
-import { groupPeriods } from "@/lib/periodGroups";
-import { PeriodChip } from "@/components/mark/PeriodChip";
+import { groupPeriods, type PeriodGroup } from "@/lib/periodGroups";
+import { PeriodChip, STATUS_LABEL } from "@/components/mark/PeriodChip";
 import { fullWeekdayName } from "@/lib/dates";
 import { tallyDayPeriods } from "@/lib/dayTally";
 import { WEEKDAYS, type Weekday } from "@/lib/weekday";
@@ -91,6 +91,7 @@ export function MarkDayClient({
   const [isSaving, startSaving] = useTransition();
   const [isReverting, startReverting] = useTransition();
   const [pendingWire, setPendingWire] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
 
   const groups = useMemo(() => groupPeriods(activePeriods), [activePeriods]);
 
@@ -125,22 +126,26 @@ export function MarkDayClient({
     setHintDismissed(true);
   }
 
-  function cycleStatus(periodNos: number[]) {
+  function cycleStatus(group: PeriodGroup) {
     if (pendingDayType !== "NORMAL") return;
+    const periodNos = group.periodNos;
     setStatuses((prev) => {
-      const next = { ...prev };
       const cycled = nextTapStatus(prev[periodNos[0]]);
+      const next = { ...prev };
       for (const no of periodNos) next[no] = cycled;
+      setAnnouncement(`${group.subjectName} marked ${STATUS_LABEL[cycled]}`);
       return next;
     });
   }
 
-  function toggleCancelled(periodNos: number[]) {
+  function toggleCancelled(group: PeriodGroup) {
     if (pendingDayType !== "NORMAL") return;
+    const periodNos = group.periodNos;
     setStatuses((prev) => {
-      const next = { ...prev };
       const toggled = prev[periodNos[0]] === "CANCELLED" ? "PRESENT" : "CANCELLED";
+      const next = { ...prev };
       for (const no of periodNos) next[no] = toggled;
+      setAnnouncement(`${group.subjectName} marked ${STATUS_LABEL[toggled]}`);
       return next;
     });
   }
@@ -340,6 +345,9 @@ export function MarkDayClient({
 
   return (
     <div className="flex flex-col gap-4">
+      <span aria-live="polite" className="sr-only">
+        {announcement}
+      </span>
       <WorkingDayBanner interactive={true} />
 
       {!hintDismissed && (
@@ -369,8 +377,8 @@ export function MarkDayClient({
               group={group}
               status={statuses[group.periodNos[0]]}
               forcedAbsent={pendingDayType === "FULL_ABSENT"}
-              onTap={() => cycleStatus(group.periodNos)}
-              onLongPress={() => toggleCancelled(group.periodNos)}
+              onTap={() => cycleStatus(group)}
+              onLongPress={() => toggleCancelled(group)}
             />
           ))}
         </div>
