@@ -5,9 +5,11 @@ import { getServerAuthSession } from "@/lib/auth";
 import { connectToDatabase } from "@/lib/db";
 import { Class } from "@/lib/models/Class";
 import { DayLog, type DayType, type PeriodStatus } from "@/lib/models/DayLog";
+import { User } from "@/lib/models/User";
 import { getExpectedDay, isSemesterDay } from "@/lib/schedule";
 import { isValidDateString } from "@/lib/dates";
 import { WEEKDAYS, type Weekday } from "@/lib/weekday";
+import { shouldRemoveOverride } from "@/lib/revertGuard";
 
 const ALLOWED_STATUSES: ReadonlySet<PeriodStatus> = new Set<PeriodStatus>([
   "PRESENT",
@@ -139,13 +141,24 @@ export async function saveDayLog(date: string, payload: SaveDayLogPayload): Prom
   revalidatePath(`/mark/${date}`);
 }
 
+export interface RevertWorkingDayResult {
+  /**
+   * False when another class member still has a DayLog on this date — the
+   * shared dayOrderOverride was deliberately left in place, and this
+   * user's own date is now an unfiled (not no-school) working day.
+   */
+  overrideRemoved: boolean;
+}
+
 /**
- * Undoes a user-logged working day: deletes the DayLog and removes the
- * matching dayOrderOverride from the class, restoring the plain NO_SCHOOL
- * state for this date. The override lives on the shared Class document, so
- * this affects how every student in the class sees this date going forward.
+ * Undoes a user-logged working day: always deletes this user's own DayLog.
+ * The matching dayOrderOverride — shared, class-level state — is only
+ * removed if no other class member has a filing on this date; if someone
+ * else does, the outfit's calendar still says the day happened, so the
+ * override survives and this user's date becomes an unfiled working day
+ * instead of reverting all the way to NO_SCHOOL.
  */
-export async function revertWorkingDay(date: string): Promise<void> {
+export async function revertWorkingDay(date: string): Promise<RevertWorkingDayResult> {
   const session = await getServerAuthSession();
   if (!session?.user) {
     throw new Error("Not authenticated");
@@ -163,9 +176,23 @@ export async function revertWorkingDay(date: string): Promise<void> {
   await connectToDatabase();
 
   await DayLog.deleteOne({ userId: session.user.id, date });
-  await Class.updateOne({ _id: classId }, { $pull: { dayOrderOverrides: { date } } });
+
+  const classmateIds = await User.find({ classId }).distinct("_id");
+  const otherClassmateIds = classmateIds
+    .map((id) => id.toString())
+    .filter((id) => id !== session.user.id);
+  const otherMemberFilingsCount = await DayLog.countDocuments({
+    date,
+    userId: { $in: otherClassmateIds },
+  });
+
+  const overrideRemoved = shouldRemoveOverride(otherMemberFilingsCount);
+  if (overrideRemoved) {
+    await Class.updateOne({ _id: classId }, { $pull: { dayOrderOverrides: { date } } });
+  }
 
   revalidatePath(`/mark/${date}`);
+  return { overrideRemoved };
 }
 
 /**

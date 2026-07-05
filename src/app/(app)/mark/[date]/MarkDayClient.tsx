@@ -100,6 +100,7 @@ export function MarkDayClient({
   const [confirmingTearUp, setConfirmingTearUp] = useState(false);
   const [pendingWire, setPendingWire] = useState(false);
   const [announcement, setAnnouncement] = useState("");
+  const [revertNote, setRevertNote] = useState<string | null>(null);
 
   const groups = useMemo(() => groupPeriods(activePeriods), [activePeriods]);
 
@@ -170,6 +171,7 @@ export function MarkDayClient({
     setStatuses(defaultStatuses(activePeriods, savedSummary));
     setPendingDayType(savedSummary && savedSummary.dayType !== "NORMAL" ? savedSummary.dayType : "NORMAL");
     setError(null);
+    setRevertNote(null);
     setMode("form");
   }
 
@@ -178,6 +180,7 @@ export function MarkDayClient({
     setStatuses(defaultStatuses(timetable[weekday], null));
     setPendingDayType("NORMAL");
     setError(null);
+    setRevertNote(null);
     setMode("form");
   }
 
@@ -185,18 +188,37 @@ export function MarkDayClient({
     setWorkingDayWeekday(null);
     setPendingDayType("NORMAL");
     setError(null);
+    setRevertNote(null);
     setMode("noschool");
   }
 
   function handleRevert() {
     setError(null);
+    setRevertNote(null);
     startReverting(async () => {
       try {
-        await revertWorkingDay(date);
+        const result = await revertWorkingDay(date);
+        removeQueuedFiling(date);
         setSavedSummary(null);
-        setWorkingDayWeekday(null);
-        setPendingDayType("NORMAL");
-        setMode("noschool");
+        setPendingWire(false);
+
+        if (result.overrideRemoved) {
+          setWorkingDayWeekday(null);
+          setPendingDayType("NORMAL");
+          setMode("noschool");
+        } else {
+          // The outfit's shared calendar still says this day happened (someone
+          // else has a filing on it) — the override survives, so this date
+          // stays a working day for this user, just unfiled now.
+          const nextWeekday = isNonSchoolDay ? (expected?.followedWeekday ?? null) : null;
+          setWorkingDayWeekday(nextWeekday);
+          setStatuses(defaultStatuses(expected?.periods ?? [], null));
+          setPendingDayType("NORMAL");
+          setMode(expected ? "form" : "noschool");
+          setRevertNote(
+            "Your filing is torn up — but the outfit's records show this day happened, so it stays on the calendar."
+          );
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not revert. Try again.");
       }
@@ -205,6 +227,7 @@ export function MarkDayClient({
 
   function handleTearUp() {
     setError(null);
+    setRevertNote(null);
     startTearingUp(async () => {
       try {
         await deleteDayLog(date);
@@ -225,6 +248,7 @@ export function MarkDayClient({
 
   function handleDone() {
     setError(null);
+    setRevertNote(null);
     const payloadPeriods =
       pendingDayType === "NORMAL"
         ? activePeriods.map((period) => ({
@@ -420,6 +444,12 @@ export function MarkDayClient({
         {announcement}
       </span>
       <WorkingDayBanner interactive={true} />
+
+      {revertNote && (
+        <div className="border border-border-dark bg-paper-dark px-3 py-2">
+          <FlavorText className="text-sm">{revertNote}</FlavorText>
+        </div>
+      )}
 
       {!hintDismissed && (
         <div className="flex items-center justify-between gap-2 border border-border-dark bg-paper-dark px-3 py-2">
