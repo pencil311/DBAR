@@ -1,6 +1,7 @@
 import { Heading, PosterFrame } from "@/components/ui";
 import { MeterTrack } from "@/components/poster/MeterTrack";
 import { cn } from "@/lib/cn";
+import { formatCredits } from "@/lib/subjectCredits";
 
 export interface SubjectCardProps {
   code: string;
@@ -17,7 +18,9 @@ export function SubjectCard({ code, name, occurred, attended, percentage }: Subj
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-col">
             <span className="font-ledger text-ink-muted">{name}</span>
-            <span className="font-ledger text-xs text-ink-muted">{code}</span>
+            <span className="font-ledger text-xs text-ink-muted">
+              {code} · {formatCredits(code)} cr
+            </span>
           </div>
           <span className="shrink-0 font-ledger text-xs uppercase tracking-wide text-ink-muted">
             No sessions yet.
@@ -35,7 +38,9 @@ export function SubjectCard({ code, name, occurred, attended, percentage }: Subj
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-col">
             <span className="font-ledger text-ink">{name}</span>
-            <span className="font-ledger text-xs text-ink-muted">{code}</span>
+            <span className="font-ledger text-xs text-ink-muted">
+              {code} · {formatCredits(code)} cr
+            </span>
           </div>
           <Heading size="lg" as="p" className={cn(danger && "!text-blood")}>
             {percentage.toFixed(1)}%

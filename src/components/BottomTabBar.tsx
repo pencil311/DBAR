@@ -9,6 +9,8 @@ const TABS = [
   { href: "/mark", label: "Mark" },
   { href: "/ledger", label: "Ledger" },
   { href: "/subjects", label: "Docket" },
+  { href: "/grades", label: "Grades" },
+  { href: "/ask", label: "Marshal" },
 ] as const;
 
 export function BottomTabBar() {
@@ -23,11 +25,16 @@ export function BottomTabBar() {
             key={tab.href}
             href={tab.href}
             className={cn(
-              "flex-1 border-b-[3px] py-3 text-center font-ledger text-sm uppercase tracking-wide",
+              "flex-1 border-b-[3px] py-3 text-center font-ledger text-[11px] sm:text-sm uppercase tracking-wide",
               isActive ? "border-brass text-ink" : "border-transparent text-ink-muted"
             )}
           >
-            {tab.label}
+            <span className="relative inline-block">
+              {tab.label}
+              {tab.label === "Marshal" && (
+                <span className="absolute -right-3 -top-1 font-poster text-[10px] text-brass">✦</span>
+              )}
+            </span>
           </Link>
         );
       })}

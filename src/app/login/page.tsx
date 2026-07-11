@@ -15,6 +15,14 @@ export default function LoginPage() {
           Ride In With Google
         </Stamp>
       </button>
+
+      {process.env.NODE_ENV !== "production" && (
+        <button type="button" onClick={() => signIn("dev", { callbackUrl: "/" })}>
+          <Stamp variant="brass" className="transition-colors hover:border-blood hover:text-blood">
+            Dev Login (local)
+          </Stamp>
+        </button>
+      )}
     </main>
   );
 }
