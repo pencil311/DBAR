@@ -209,6 +209,9 @@ export function runTool(ctx: ChatContext, name: string, args: Record<string, unk
         cat: `${ceil(plan.perInternal.cat)}/60`,
         assignments: `${ceil(plan.perInternal.assignment)}/40`,
       };
+      const absoluteMinEndSemRaw = ((plan.finalNeeded - 40) / 60) * 100;
+      const absoluteMinEndSem = Math.max(absoluteMinEndSemRaw, 45);
+
       return {
         subject: subject.name,
         code: subject.code,
@@ -221,7 +224,8 @@ export function runTool(ctx: ChatContext, name: string, args: Record<string, unk
         internal_total: `${ceil(plan.internalTotal)}/200`,
         pass_floor: "Internals must total at least 90/200 to pass at all — below that it's a fail (RA) no matter the end-sem.",
         end_sem: `${ceil(plan.endSem)}/100`,
-        note: "Realistic plan: assignments high, CATs strong, concept tests lighter; the end-sem covers the rest. No marks are recorded yet.",
+        absolute_minimum_end_sem_if_internals_are_perfect: `${ceil(absoluteMinEndSem)}/100`,
+        note: "The 'end_sem' field is the realistic target. The 'absolute_minimum_end_sem_if_internals_are_perfect' is the mathematical absolute minimum needed if they score 200/200 on internals.",
       };
     }
 
