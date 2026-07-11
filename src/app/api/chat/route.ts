@@ -7,9 +7,8 @@ import { DayLog } from "@/lib/models/DayLog";
 import { todayIST } from "@/lib/dates";
 import { CHAT_TOOLS, runTool, type ChatContext } from "@/lib/ai/tools";
 
-// Llama 3.1 70B on Groq. Set GROQ_MODEL if your account serves a different id
-// (Groq deprecated llama-3.1-70b-versatile in favour of llama-3.3-70b-versatile).
-const MODEL = process.env.GROQ_MODEL ?? "llama-3.1-8b-instant";
+// The AI model id. Set AI_MODEL to whichever model your Groq account serves.
+const MODEL = process.env.AI_MODEL ?? "llama-3.1-8b-instant";
 const MAX_TOOL_ROUNDS = 5;
 
 const SYSTEM_PROMPT = `You are the Marshal — a laconic, dependable deputy inside DBar, a Red Dead Redemption-styled attendance-and-grades tracker for one college student. Speak plainly, with a light old-west drawl; keep answers short.
@@ -36,9 +35,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "You aren't riding with an outfit yet." }, { status: 400 });
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = process.env.AI_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "The telegraph line is down (GROQ_API_KEY not set)." }, { status: 503 });
+    return NextResponse.json({ error: "The telegraph line is down (AI_KEY not set)." }, { status: 503 });
   }
 
   let body: { messages?: IncomingMessage[] };
