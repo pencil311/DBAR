@@ -97,22 +97,20 @@ export interface BunkBudget {
 }
 
 /**
- * canBunk: max consecutive future periods markable absent while staying >= 80%.
- *   attended / (occurred + n) >= 0.8  =>  n <= attended/0.8 - occurred
- *   => n = floor(attended/0.8) - occurred   (floor(x - k) = floor(x) - k for integer k)
- *   attended/0.8 == attended*5/4, and dividing by 4 (a power of two) is exact
- *   in floating point, so this never suffers rounding error.
- *
- * mustAttend: min consecutive future periods that must be attended to reach >= 80%.
- *   (attended + n) / (occurred + n) >= 0.8  =>  n >= (0.8*occurred - attended) / 0.2
- *   Substituting 0.8 = 4/5 and 0.2 = 1/5, the whole right-hand side simplifies
- *   exactly to the integer `4*occurred - 5*attended` — no floats involved at all.
+ * canBunk: max consecutive future periods markable absent while staying >= target.
+ * mustAttend: min consecutive future periods that must be attended to reach >= target.
  */
-export function computeBunkBudget(stats: Pick<Stats, "totalOccurred" | "totalAttended">): BunkBudget {
+export function computeBunkBudget(stats: Pick<Stats, "totalOccurred" | "totalAttended">, targetPercentage: number = 80): BunkBudget {
   const { totalOccurred: occurred, totalAttended: attended } = stats;
+  const p = targetPercentage / 100;
+  
+  if (p <= 0) return { canBunk: 9999, mustAttend: 0 };
+  if (p >= 1) return { canBunk: 0, mustAttend: occurred > attended ? 9999 : 0 };
 
-  const canBunk = Math.max(0, Math.floor((5 * attended) / 4) - occurred);
-  const mustAttend = Math.max(0, 4 * occurred - 5 * attended);
+  const canBunk = Math.max(0, Math.floor((attended / p) - occurred + 1e-9));
+  
+  const mustAttendRaw = (p * occurred - attended) / (1 - p);
+  const mustAttend = Math.max(0, Math.ceil(mustAttendRaw - 1e-9));
 
   return { canBunk, mustAttend };
 }

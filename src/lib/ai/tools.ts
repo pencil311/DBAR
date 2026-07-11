@@ -100,8 +100,17 @@ export const CHAT_TOOLS = [
     function: {
       name: "attendance_safety",
       description:
-        "Check whether the student can skip/bunk classes while staying at or above the required 80% attendance. Returns how many more periods they can miss (0 if none), and — if already below 80% — how many periods they must attend in a row to get back to safe. Use for ANY 'can I skip', 'is it safe to bunk', 'how many can I miss', or 'how many must I attend to be safe' question.",
-      parameters: { type: "object", properties: {}, required: [] },
+        "Check whether the student can skip/bunk classes while staying at or above a target attendance percentage. Returns how many more periods they can miss (0 if none), and — if already below the target — how many periods they must attend in a row to get back to safe. Use for ANY 'can I skip', 'is it safe to bunk', 'how many can I miss', or 'how many must I attend to reach X%' question.",
+      parameters: { 
+        type: "object", 
+        properties: {
+          target_percentage: {
+            type: "number",
+            description: "The target percentage to check against. Defaults to 80.",
+          }
+        }, 
+        required: [] 
+      },
     },
   },
   {
@@ -218,19 +227,20 @@ export function runTool(ctx: ChatContext, name: string, args: Record<string, unk
 
     case "attendance_safety": {
       const stats = computeStats(ctx.cls, ctx.logs, ctx.asOf);
-      const { canBunk, mustAttend } = computeBunkBudget(stats);
-      const isSafe = stats.percentage >= 80;
+      const target = typeof args.target_percentage === "number" ? args.target_percentage : 80;
+      const { canBunk, mustAttend } = computeBunkBudget(stats, target);
+      const isSafe = stats.percentage >= target;
       return {
         current_percentage: Number(stats.percentage.toFixed(1)),
-        required_minimum: 80,
+        required_minimum: target,
         is_safe: isSafe,
         periods_you_can_still_skip: canBunk,
-        periods_to_attend_to_reach_80: mustAttend,
+        periods_to_attend_to_reach_target: mustAttend,
         verdict: isSafe
           ? canBunk > 0
-            ? `Safe: can miss up to ${canBunk} more INDIVIDUAL CLASS PERIODS and stay at/above 80%. (Note to AI: do NOT say days)`
-            : "On the edge: skipping even one period drops below 80%."
-          : `NOT safe: below 80%, can skip 0. Must attend ${mustAttend} INDIVIDUAL CLASS PERIODS straight to reach 80%. (Note to AI: do NOT say days, a day has ~7 classes!)`,
+            ? `Safe: can miss up to ${canBunk} more INDIVIDUAL CLASS PERIODS and stay at/above ${target}%. (Note to AI: do NOT say days)`
+            : `On the edge: skipping even one period drops below ${target}%.`
+          : `NOT safe: below ${target}%, can skip 0. Must attend ${mustAttend} INDIVIDUAL CLASS PERIODS straight to reach ${target}%. (Note to AI: do NOT say days, a day has ~7 classes!)`,
       };
     }
 
