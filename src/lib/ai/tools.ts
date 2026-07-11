@@ -228,9 +228,9 @@ export function runTool(ctx: ChatContext, name: string, args: Record<string, unk
         periods_to_attend_to_reach_80: mustAttend,
         verdict: isSafe
           ? canBunk > 0
-            ? `Safe: can miss up to ${canBunk} more period(s) and stay at/above 80%.`
+            ? `Safe: can miss up to ${canBunk} more INDIVIDUAL CLASS PERIODS and stay at/above 80%. (Note to AI: do NOT say days)`
             : "On the edge: skipping even one period drops below 80%."
-          : `NOT safe: below 80%, can skip 0. Must attend ${mustAttend} period(s) straight to reach 80%.`,
+          : `NOT safe: below 80%, can skip 0. Must attend ${mustAttend} INDIVIDUAL CLASS PERIODS straight to reach 80%. (Note to AI: do NOT say days, a day has ~7 classes!)`,
       };
     }
 
