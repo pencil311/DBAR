@@ -4,6 +4,7 @@ import { computeStats } from "@/lib/engine";
 import { displaySubjectName } from "@/lib/electiveDisplay";
 import { WEEKDAYS } from "@/lib/weekday";
 import { getExpectedDay } from "@/lib/schedule";
+import { addDays } from "@/lib/dates";
 import { realisticTargetMarks, GRADE_TABLE, type GradeLetter } from "@/lib/grades";
 import { creditsFor } from "@/lib/subjectCredits";
 
@@ -66,8 +67,8 @@ export const CHAT_TOOLS = [
         type: "object",
         properties: {
           subject: {
-            type: "string",
-            description: "Optional subject code or name to scope to. Omit for overall attendance.",
+            type: ["string", "null"],
+            description: "Optional subject code or name to scope to. Omit (or null) for overall attendance.",
           },
         },
         required: [],
@@ -91,6 +92,24 @@ export const CHAT_TOOLS = [
           },
         },
         required: ["subject", "target_grade"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "project_attendance",
+      description:
+        "Project the student's attendance percentage IF they attend the next N upcoming school days. Weekends, holidays, and non-semester days are skipped automatically. Use for 'what if I attend the next 5 days / all of next week' style questions.",
+      parameters: {
+        type: "object",
+        properties: {
+          school_days: {
+            type: "number",
+            description: "How many upcoming school days the student will attend (e.g. 5 for a full week). Defaults to 5.",
+          },
+        },
+        required: [],
       },
     },
   },
@@ -180,6 +199,45 @@ export function runTool(ctx: ChatContext, name: string, args: Record<string, unk
         pass_floor: "Internals must total at least 90/200 to pass at all — below that it's a fail (RA) no matter the end-sem.",
         end_sem: `${ceil(plan.endSem)}/100`,
         note: "Realistic plan: assignments high, CATs strong, concept tests lighter; the end-sem covers the rest. No marks are recorded yet.",
+      };
+    }
+
+    case "project_attendance": {
+      const stats = computeStats(ctx.cls, ctx.logs, ctx.asOf);
+      const n =
+        typeof args.school_days === "number" && args.school_days > 0
+          ? Math.min(Math.floor(args.school_days), 60)
+          : 5;
+
+      let counted = 0;
+      let addedPeriods = 0;
+      const dates: string[] = [];
+      // Walk forward from today until we've gathered N actual school days.
+      for (let i = 1; i <= 400 && counted < n; i++) {
+        const date = addDays(ctx.asOf, i);
+        const expected = getExpectedDay(ctx.cls, date);
+        if (!expected) continue; // weekend, holiday, or outside the semester
+        counted += 1;
+        dates.push(date);
+        addedPeriods += expected.periods.filter((p) => p.countsForAttendance).length;
+      }
+
+      const projAttended = stats.totalAttended + addedPeriods;
+      const projOccurred = stats.totalOccurred + addedPeriods;
+      const projPct = projOccurred === 0 ? 100 : (projAttended / projOccurred) * 100;
+
+      return {
+        current_percentage: Number(stats.percentage.toFixed(1)),
+        current_attended: stats.totalAttended,
+        current_occurred: stats.totalOccurred,
+        school_days_attended: counted,
+        dates,
+        periods_added: addedPeriods,
+        projected_percentage: Number(projPct.toFixed(1)),
+        note:
+          counted < n
+            ? `Only ${counted} school day(s) remain before the semester ends.`
+            : "Assumes every period on those days is attended.",
       };
     }
 
