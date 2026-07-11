@@ -238,9 +238,9 @@ export function runTool(ctx: ChatContext, name: string, args: Record<string, unk
         periods_to_attend_to_reach_target: mustAttend,
         verdict: isSafe
           ? canBunk > 0
-            ? `Safe: can miss up to ${canBunk} more INDIVIDUAL CLASS PERIODS and stay at/above ${target}%. (Note to AI: do NOT say days)`
+            ? `Safe: can miss up to ${canBunk} more INDIVIDUAL CLASS PERIODS and stay at/above ${target}%. (Note to AI: if student asks for days, divide periods by 7)`
             : `On the edge: skipping even one period drops below ${target}%.`
-          : `NOT safe: below ${target}%, can skip 0. Must attend ${mustAttend} INDIVIDUAL CLASS PERIODS straight to reach ${target}%. (Note to AI: do NOT say days, a day has ~7 classes!)`,
+          : `NOT safe: below ${target}%, can skip 0. Must attend ${mustAttend} INDIVIDUAL CLASS PERIODS straight to reach ${target}%. (Note to AI: if student asks for days, divide periods by 7)`,
       };
     }
 

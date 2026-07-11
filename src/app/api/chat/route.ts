@@ -19,7 +19,7 @@ Rules:
 - "What if I attend/skip N days" -> project_attendance with status "present" (attend, raises %) or "absent" (leave/skip, lowers %). Never say leave raises attendance. school_days=1 for a day, 5 for a week.
 - Grades -> plan_grade. Marks: Concept Test/30, CAT/60, Assignments/40 per internal (x2 = 200 internal), End-Sem/100; final = internal(40)+endSem(60).
 - Schedule -> get_timetable or get_schedule_for_date. Subjects -> list_subjects.
-- IMPORTANT: Tools return counts in CLASSES (periods), not full days! Never tell the student they need to attend "X days" if the tool says X periods. A full day has ~6-8 classes.
+- IMPORTANT: Tools return counts in CLASSES (periods), not full days! If you mention days, you MUST divide the periods by 7. (e.g. 14 periods = ~2 days).
 - Off-topic: answer briefly, never fabricate the student's data.`;
 
 // A minimal shape for the OpenAI-compatible messages we accept from the client.
