@@ -1,7 +1,21 @@
-import { getServerSession, type NextAuthOptions } from "next-auth";
+import { getServerSession, type NextAuthOptions, type Session } from "next-auth";
 import GoogleProvider, { type GoogleProfile } from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
 import { connectToDatabase } from "@/lib/db";
 import { User } from "@/lib/models/User";
+import { DEMO_MODE, DEMO_USER } from "@/lib/demo";
+
+/**
+ * Local-only login so the app is usable without Google OAuth credentials.
+ * Enabled ONLY when NODE_ENV !== "production", so it can never reach a
+ * deployed build. Signs in a single fixed local user.
+ */
+export const DEV_LOGIN_ENABLED = process.env.NODE_ENV !== "production";
+export const DEV_USER = {
+  id: "dev-local",
+  email: "dev@local.test",
+  name: "Local Deputy",
+} as const;
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -9,6 +23,16 @@ export const authOptions: NextAuthOptions = {
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
     }),
+    ...(DEV_LOGIN_ENABLED
+      ? [
+          CredentialsProvider({
+            id: "dev",
+            name: "Dev Login",
+            credentials: {},
+            authorize: async () => ({ ...DEV_USER }),
+          }),
+        ]
+      : []),
   ],
   session: {
     strategy: "jwt",
@@ -20,19 +44,30 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, account, profile, trigger, session }) {
-      if (account && profile) {
+      // Google sign-in carries a profile; the dev credentials provider doesn't.
+      const isGoogle = account?.provider === "google" && profile;
+      const isDev = DEV_LOGIN_ENABLED && account?.provider === "dev";
+
+      if (isGoogle || isDev) {
         await connectToDatabase();
-        const googleProfile = profile as GoogleProfile;
-        const googleId = account.providerAccountId;
+
+        const { googleId, email, name, image } = isGoogle
+          ? {
+              googleId: account!.providerAccountId,
+              email: (profile as GoogleProfile).email,
+              name: (profile as GoogleProfile).name,
+              image: (profile as GoogleProfile).picture,
+            }
+          : { googleId: DEV_USER.id, email: DEV_USER.email, name: DEV_USER.name, image: undefined };
 
         const user = await User.findOneAndUpdate(
           { googleId },
           {
             $setOnInsert: {
               googleId,
-              email: googleProfile.email,
-              name: googleProfile.name,
-              image: googleProfile.picture,
+              email,
+              name,
+              image,
               classId: null,
               elective: null,
               createdAt: new Date(),
@@ -69,6 +104,23 @@ export const authOptions: NextAuthOptions = {
   },
 };
 
-export function getServerAuthSession() {
+export async function getServerAuthSession(): Promise<Session | null> {
+  // Demo mode: no login — resolve the seeded demo user straight from the DB.
+  if (DEMO_MODE) {
+    await connectToDatabase();
+    const user = await User.findOne({ googleId: DEMO_USER.googleId });
+    if (!user) return null;
+    return {
+      user: {
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        image: user.image ?? null,
+        classId: user.classId ? user.classId.toString() : null,
+        elective: user.elective,
+      },
+      expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+  }
   return getServerSession(authOptions);
 }
