@@ -8,17 +8,14 @@ import {
   computeStats,
   honorScore,
   posterState,
-  verificationCountdown,
-  VERIFICATION_DATES,
 } from "@/lib/engine";
-import { addDays, formatDisplayDate, todayIST } from "@/lib/dates";
+import { addDays, todayIST } from "@/lib/dates";
 import { tallyDayPeriods } from "@/lib/dayTally";
 import { Heading } from "@/components/ui";
 import { NoClassMessage } from "@/components/NoClassMessage";
 import { UnfiledWarrantsStrip } from "@/components/mark/UnfiledWarrantsStrip";
 import { WantedPoster } from "@/components/poster/WantedPoster";
 import { HonorMeter } from "@/components/poster/HonorMeter";
-import { MarshalNotice } from "@/components/poster/MarshalNotice";
 import { type QuickDrawState } from "@/components/poster/QuickDraw";
 import { HomeQuickDraw } from "@/components/poster/HomeQuickDraw";
 import { HeaderSettingsLink } from "@/components/HeaderSettingsLink";
@@ -47,10 +44,7 @@ export default async function Home() {
   const budget = computeBunkBudget(stats);
   const poster = posterState(stats.percentage);
   const honor = honorScore(allLogs, today);
-  const countdown = verificationCountdown(today);
   const warrants = stats.unmarkedDays.filter((d) => d < today);
-
-  const upcomingVerificationDate = [...VERIFICATION_DATES].filter((d) => d >= today).sort()[0] ?? null;
 
   const sevenDaysAgo = addDays(today, -6);
   const recentLogs = allLogs.filter((l) => l.date >= sevenDaysAgo && l.date <= today);
@@ -107,14 +101,6 @@ export default async function Home() {
       />
 
       <HonorMeter score={honor} flavorLine={honorFlavor} />
-
-      {countdown !== null && upcomingVerificationDate && (
-        <MarshalNotice
-          days={countdown}
-          dateLabel={formatDisplayDate(upcomingVerificationDate)}
-          showWarning={stats.percentage < 80}
-        />
-      )}
 
       {warrants.length > 0 && <UnfiledWarrantsStrip dates={warrants} />}
 

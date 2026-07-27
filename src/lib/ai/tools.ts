@@ -1,6 +1,6 @@
 import type { IClass } from "@/lib/models/Class";
 import type { IDayLog } from "@/lib/models/DayLog";
-import { computeStats } from "@/lib/engine";
+import { computeStats, computeBunkBudget } from "@/lib/engine";
 import { displaySubjectName } from "@/lib/electiveDisplay";
 import { WEEKDAYS } from "@/lib/weekday";
 import { getExpectedDay } from "@/lib/schedule";
@@ -98,15 +98,38 @@ export const CHAT_TOOLS = [
   {
     type: "function",
     function: {
+      name: "attendance_safety",
+      description:
+        "Check whether the student can skip/bunk classes while staying at or above a target attendance percentage. Returns how many more periods they can miss (0 if none), and — if already below the target — how many periods they must attend in a row to get back to safe. Use for ANY 'can I skip', 'is it safe to bunk', 'how many can I miss', or 'how many must I attend to reach X%' question.",
+      parameters: { 
+        type: "object", 
+        properties: {
+          target_percentage: {
+            type: "number",
+            description: "The target percentage to check against. Defaults to 80.",
+          }
+        }, 
+        required: [] 
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "project_attendance",
       description:
-        "Project the student's attendance percentage IF they attend the next N upcoming school days. Weekends, holidays, and non-semester days are skipped automatically. Use for 'what if I attend the next 5 days / all of next week' style questions.",
+        "Project the student's attendance percentage over the next N upcoming school days, assuming they are either PRESENT for all of them (attend) or ABSENT for all of them (take leave/skip). Weekends, holidays, and non-semester days are skipped automatically. Use status='absent' for 'what if I take leave / skip / bunk' questions (this LOWERS attendance) and status='present' for 'what if I attend' questions (this RAISES it). One school day ≈ a full day of classes.",
       parameters: {
         type: "object",
         properties: {
           school_days: {
             type: "number",
-            description: "How many upcoming school days the student will attend (e.g. 5 for a full week). Defaults to 5.",
+            description: "How many upcoming school days this covers. Use 1 for a single day (e.g. 'Monday'), 5 for a full week. Defaults to 1.",
+          },
+          status: {
+            type: "string",
+            enum: ["present", "absent"],
+            description: "'present' = the student attends those days; 'absent' = the student takes leave/skips them. Defaults to 'present'.",
           },
         },
         required: [],
@@ -186,6 +209,9 @@ export function runTool(ctx: ChatContext, name: string, args: Record<string, unk
         cat: `${ceil(plan.perInternal.cat)}/60`,
         assignments: `${ceil(plan.perInternal.assignment)}/40`,
       };
+      const absoluteMinEndSemRaw = ((plan.finalNeeded - 40) / 60) * 100;
+      const absoluteMinEndSem = Math.max(absoluteMinEndSemRaw, 45);
+
       return {
         subject: subject.name,
         code: subject.code,
@@ -198,7 +224,27 @@ export function runTool(ctx: ChatContext, name: string, args: Record<string, unk
         internal_total: `${ceil(plan.internalTotal)}/200`,
         pass_floor: "Internals must total at least 90/200 to pass at all — below that it's a fail (RA) no matter the end-sem.",
         end_sem: `${ceil(plan.endSem)}/100`,
-        note: "Realistic plan: assignments high, CATs strong, concept tests lighter; the end-sem covers the rest. No marks are recorded yet.",
+        absolute_minimum_end_sem_if_internals_are_perfect: `${ceil(absoluteMinEndSem)}/100`,
+        note: "The 'end_sem' field is the realistic target. The 'absolute_minimum_end_sem_if_internals_are_perfect' is the mathematical absolute minimum needed if they score 200/200 on internals.",
+      };
+    }
+
+    case "attendance_safety": {
+      const stats = computeStats(ctx.cls, ctx.logs, ctx.asOf);
+      const target = typeof args.target_percentage === "number" ? args.target_percentage : 80;
+      const { canBunk, mustAttend } = computeBunkBudget(stats, target);
+      const isSafe = stats.percentage >= target;
+      return {
+        current_percentage: Number(stats.percentage.toFixed(1)),
+        required_minimum: target,
+        is_safe: isSafe,
+        periods_you_can_still_skip: canBunk,
+        periods_to_attend_to_reach_target: mustAttend,
+        verdict: isSafe
+          ? canBunk > 0
+            ? `Safe: can miss up to ${canBunk} more INDIVIDUAL CLASS PERIODS and stay at/above ${target}%. (Note to AI: if student asks for days, divide periods by 7)`
+            : `On the edge: skipping even one period drops below ${target}%.`
+          : `NOT safe: below ${target}%, can skip 0. Must attend ${mustAttend} INDIVIDUAL CLASS PERIODS straight to reach ${target}%. (Note to AI: if student asks for days, divide periods by 7)`,
       };
     }
 
@@ -207,10 +253,11 @@ export function runTool(ctx: ChatContext, name: string, args: Record<string, unk
       const n =
         typeof args.school_days === "number" && args.school_days > 0
           ? Math.min(Math.floor(args.school_days), 60)
-          : 5;
+          : 1;
+      const absent = args.status === "absent";
 
       let counted = 0;
-      let addedPeriods = 0;
+      let periods = 0;
       const dates: string[] = [];
       // Walk forward from today until we've gathered N actual school days.
       for (let i = 1; i <= 400 && counted < n; i++) {
@@ -219,25 +266,30 @@ export function runTool(ctx: ChatContext, name: string, args: Record<string, unk
         if (!expected) continue; // weekend, holiday, or outside the semester
         counted += 1;
         dates.push(date);
-        addedPeriods += expected.periods.filter((p) => p.countsForAttendance).length;
+        periods += expected.periods.filter((p) => p.countsForAttendance).length;
       }
 
-      const projAttended = stats.totalAttended + addedPeriods;
-      const projOccurred = stats.totalOccurred + addedPeriods;
+      // Present → those periods count as attended AND occurred (raises %).
+      // Absent → they count as occurred only (lowers %).
+      const projAttended = stats.totalAttended + (absent ? 0 : periods);
+      const projOccurred = stats.totalOccurred + periods;
       const projPct = projOccurred === 0 ? 100 : (projAttended / projOccurred) * 100;
 
       return {
+        assumption: absent ? "student takes leave (absent) on those days" : "student attends those days",
         current_percentage: Number(stats.percentage.toFixed(1)),
         current_attended: stats.totalAttended,
         current_occurred: stats.totalOccurred,
-        school_days_attended: counted,
+        school_days: counted,
         dates,
-        periods_added: addedPeriods,
+        periods_affected: periods,
         projected_percentage: Number(projPct.toFixed(1)),
         note:
           counted < n
             ? `Only ${counted} school day(s) remain before the semester ends.`
-            : "Assumes every period on those days is attended.",
+            : absent
+              ? "Assumes every period on those days is missed."
+              : "Assumes every period on those days is attended.",
       };
     }
 

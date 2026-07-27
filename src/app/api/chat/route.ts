@@ -11,14 +11,16 @@ import { CHAT_TOOLS, runTool, type ChatContext } from "@/lib/ai/tools";
 const MODEL = process.env.AI_MODEL ?? "llama-3.1-8b-instant";
 const MAX_TOOL_ROUNDS = 5;
 
-const SYSTEM_PROMPT = `You are the Marshal — a laconic, dependable deputy inside DBar, a Red Dead Redemption-styled attendance-and-grades tracker for one college student. Speak plainly, with a light old-west drawl; keep answers short.
+const SYSTEM_PROMPT = `You are the Marshal, a laconic deputy in DBar (a wanted-poster-styled attendance & grades app for one student). Short, plain answers, light old-west tone.
 
-Hard rules:
-- NEVER invent numbers. For anything about attendance or grades, call a tool and report only what it returns. If a tool returns an error or "no marks recorded yet", say so honestly.
-- Marks are out of: Concept Test 30, CAT 60, Assignments 40 (per internal, two internals = 200), End-Sem 100. The final grade combines internal (as 40) and end-sem (as 60) out of 100.
-- If the student names a subject loosely, pass what they said to the tool — it will resolve it.
-- You have access to their weekly timetable. If they ask about their schedule or classes, use the get_timetable tool.
-- If a question isn't about attendance, schedule, or grades, answer briefly from general knowledge, but don't fabricate the student's data.`;
+Rules:
+- NEVER invent numbers. Call a tool and report only what it returns.
+- Attendance must stay >=80%. For "can I skip / bunk / is it safe" call attendance_safety; below 80% skipping is NOT safe.
+- "What if I attend/skip N days" -> project_attendance with status "present" (attend, raises %) or "absent" (leave/skip, lowers %). Never say leave raises attendance. school_days=1 for a day, 5 for a week.
+- Grades -> plan_grade. Marks: Concept Test/30, CAT/60, Assignments/40 per internal (x2 = 200 internal), End-Sem/100; final = internal(40)+endSem(60).
+- Schedule -> get_timetable or get_schedule_for_date. Subjects -> list_subjects.
+- IMPORTANT: Tools return counts in CLASSES (periods), not full days! If you mention days, you MUST divide the periods by 7. (e.g. 14 periods = ~2 days).
+- Off-topic: answer briefly, never fabricate the student's data.`;
 
 // A minimal shape for the OpenAI-compatible messages we accept from the client.
 interface IncomingMessage {
@@ -119,7 +121,22 @@ export async function POST(request: Request) {
     // Ran out of tool rounds without a final answer.
     return NextResponse.json({ reply: "Couldn't wrap that up — try asking a mite plainer." });
   } catch (err) {
+    const status = (err as { status?: number })?.status;
     const message = err instanceof Error ? err.message : "unknown";
+
+    // Groq rate limit (free tier is ~6000 tokens/min) — give a calm message.
+    if (status === 429 || /rate.?limit/i.test(message)) {
+      const wait = message.match(/try again in ([\d.]+)s/i)?.[1];
+      return NextResponse.json(
+        {
+          error: wait
+            ? `The Marshal's catching his breath — try again in about ${Math.ceil(Number(wait))}s.`
+            : "The Marshal's catching his breath — the wire's busy. Try again in a moment.",
+        },
+        { status: 429 }
+      );
+    }
+
     return NextResponse.json({ error: `The Marshal's line broke: ${message}` }, { status: 502 });
   }
 }
