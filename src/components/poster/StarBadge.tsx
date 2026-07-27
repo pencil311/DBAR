@@ -1,4 +1,11 @@
-export function StarBadge({ size = 20 }: { size?: number }) {
+export function StarBadge({
+  size = 20,
+  // Overridable so the badge can sit on ink as readily as on paper.
+  className = "fill-brass stroke-ink",
+}: {
+  size?: number;
+  className?: string;
+}) {
   return (
     <svg
       width={size}
@@ -9,7 +16,7 @@ export function StarBadge({ size = 20 }: { size?: number }) {
     >
       <path
         d="M12 2l2.6 6.2 6.7.5-5.1 4.4 1.6 6.6L12 16.9l-5.8 2.8 1.6-6.6-5.1-4.4 6.7-.5z"
-        className="fill-brass stroke-ink"
+        className={className}
         strokeWidth="1"
         strokeLinejoin="round"
       />

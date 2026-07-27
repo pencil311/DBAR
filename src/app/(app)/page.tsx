@@ -60,7 +60,7 @@ export default async function Home() {
   const honorFlavor =
     bunkDays === 0
       ? "A clean week's ride."
-      : `${bunkDays} bunk${bunkDays === 1 ? "" : "s"} this week. Your honor fades, partner.`;
+      : `${bunkDays} bunk${bunkDays === 1 ? "" : "s"} this week. You cannot be saved.`;
 
   const todayLog = allLogs.find((l) => l.date === today) ?? null;
   const expectedToday = getExpectedDay(cls, today);

@@ -1,5 +1,5 @@
 import { getServerAuthSession } from "@/lib/auth";
-import { Heading, FlavorText, PosterFrame } from "@/components/ui";
+import { BackLink, Heading, FlavorText, PosterFrame } from "@/components/ui";
 import { NoClassMessage } from "@/components/NoClassMessage";
 import { AskMarshal } from "@/components/ai/AskMarshal";
 
@@ -11,6 +11,10 @@ export default async function AskPage() {
 
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-4 p-4 pb-8">
+      {/* The Marshal is reached from the floater, not the tab bar — so this
+          page carries its own way out. */}
+      <BackLink />
+
       <header className="flex flex-col items-center gap-1 pt-4 text-center">
         <Heading size="lg" as="h1">
           The Marshal

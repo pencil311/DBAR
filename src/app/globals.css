@@ -49,13 +49,24 @@ body {
 }
 
 /*
+ * The Marshal floater's flight to the nearest edge after a drag. Applied only
+ * for the release — while dragging, the button tracks the finger with no
+ * transition at all.
+ */
+.floater-snap {
+  transition: left 200ms ease-out, top 200ms ease-out, opacity 200ms ease-out;
+}
+
+/*
  * The only decorative (non-tap-feedback) motion in the app: the poster
- * percentage's reveal and the honor meter's fill/hat easing. Ordinary
+ * percentage's reveal, the honor meter's fill/hat easing, and the Marshal
+ * floater's edge snap — which simply lands instantly instead. Ordinary
  * hover/tap transitions (button colors, links) are left alone — they're
  * instantaneous feedback, not the kind of motion this preference targets.
  */
 @media (prefers-reduced-motion: reduce) {
   .animate-ink-settle,
+  .floater-snap,
   .meter-fill,
   .meter-hat {
     animation: none !important;
