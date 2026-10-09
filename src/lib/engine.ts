@@ -132,6 +132,53 @@ export function computeStats(cls: IClass, dayLogs: IDayLog[], asOfDate: string):
   };
 }
 
+/**
+ * The OVERALL attendance percentage as it stood after each filed school day,
+ * keyed by date — the same number the poster would have shown that evening.
+ *
+ * Computed in a SINGLE chronological forward pass (O(n)): never call
+ * computeStats per row. Follows the same overall rules as computeStats —
+ * MISSED counts as attended, CANCELLED is excluded, non-counting periods are
+ * excluded, FULL_ABSENT books every countable period as an absence. HOLIDAY
+ * logs contribute nothing and get NO entry (their rows show no percentage), so
+ * a holiday never moves the number. The value at the last filed day equals
+ * computeStats(cls, dayLogs, <that date>).percentage.
+ */
+export function computeDailyCumulative(cls: IClass, dayLogs: IDayLog[]): Record<string, number> {
+  const sorted = [...dayLogs].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const byDate: Record<string, number> = {};
+  let occurred = 0;
+  let attended = 0;
+
+  for (const log of sorted) {
+    if (log.dayType === "HOLIDAY") continue; // inert: no counting, no entry
+
+    const timetablePeriods = cls.timetable[log.followedWeekday] ?? [];
+
+    if (log.dayType === "FULL_ABSENT") {
+      for (const p of timetablePeriods) {
+        if (!p.countsForAttendance) continue;
+        occurred += 1;
+      }
+    } else {
+      const periodMeta = new Map(timetablePeriods.map((p) => [p.periodNo, p]));
+      for (const entry of log.periods) {
+        if (entry.status === "CANCELLED") continue;
+        const meta = periodMeta.get(entry.periodNo);
+        if (meta && !meta.countsForAttendance) continue;
+        occurred += 1;
+        if (entry.status === "PRESENT" || entry.status === "OD" || entry.status === "MISSED") {
+          attended += 1;
+        }
+      }
+    }
+
+    byDate[log.date] = percentageOf(attended, occurred);
+  }
+
+  return byDate;
+}
+
 export interface BunkBudget {
   canBunk: number;
   mustAttend: number;

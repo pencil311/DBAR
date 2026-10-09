@@ -8,6 +8,7 @@ import { addDays, daysBetween, enumerateDates } from "@/lib/dates";
 import {
   computeBunkBudget,
   computeStats,
+  computeDailyCumulative,
   honorScore,
   posterState,
   verificationCountdown,
@@ -447,6 +448,110 @@ describe("honorScore — MISSED does not cost honor", () => {
     );
     expect(allMissed).toBe(allPresent); // both +3 clean days
     expect(allMissed).toBe(53);
+  });
+});
+
+// ---- computeDailyCumulative ----------------------------------------------
+
+describe("computeDailyCumulative", () => {
+  it("matches computeStats' final percentage at the last filed day", () => {
+    const cls = makeClass();
+    const logs: IDayLog[] = [
+      dayLog({
+        date: "2026-07-06",
+        followedWeekday: "MON",
+        periods: [p(1, "M1", "PRESENT"), p(2, "M2", "PRESENT"), p(3, "M3", "PRESENT")],
+      }),
+      dayLog({
+        date: "2026-07-07",
+        followedWeekday: "TUE",
+        periods: [p(1, "T1", "PRESENT"), p(2, "T2", "ABSENT"), p(3, "T3", "PRESENT")],
+      }),
+      dayLog({
+        date: "2026-07-08",
+        followedWeekday: "WED",
+        periods: [p(1, "W1", "MISSED"), p(2, "W2", "PRESENT"), p(3, "MENTOR", "PRESENT")],
+      }),
+    ];
+    const cum = computeDailyCumulative(cls, logs);
+    const lastDate = "2026-07-08";
+    const stats = computeStats(cls, logs, lastDate);
+    expect(cum[lastDate]).toBeCloseTo(stats.percentage, 10);
+    // 8 counted (MENTOR excluded), 7 attended (one ABSENT) — MISSED counts present.
+    expect(cum[lastDate]).toBeCloseTo((7 / 8) * 100, 10);
+  });
+
+  it("records a percentage for every filed school day, rising and dipping", () => {
+    const cls = makeClass();
+    const logs: IDayLog[] = [
+      dayLog({
+        date: "2026-07-06",
+        followedWeekday: "MON",
+        periods: [p(1, "M1", "PRESENT"), p(2, "M2", "PRESENT"), p(3, "M3", "PRESENT")],
+      }),
+      dayLog({ date: "2026-07-07", followedWeekday: "TUE", dayType: "FULL_ABSENT", periods: [] }),
+    ];
+    const cum = computeDailyCumulative(cls, logs);
+    expect(cum["2026-07-06"]).toBe(100); // 3/3
+    expect(cum["2026-07-07"]).toBeCloseTo((3 / 6) * 100, 10); // + 3 absences
+  });
+
+  it("cancelled periods don't move the percentage", () => {
+    const cls = makeClass();
+    const logs: IDayLog[] = [
+      dayLog({
+        date: "2026-07-06",
+        followedWeekday: "MON",
+        periods: [p(1, "M1", "PRESENT"), p(2, "M2", "PRESENT"), p(3, "M3", "PRESENT")],
+      }),
+      dayLog({
+        date: "2026-07-07",
+        followedWeekday: "TUE",
+        periods: [p(1, "T1", "CANCELLED"), p(2, "T2", "CANCELLED"), p(3, "T3", "CANCELLED")],
+      }),
+    ];
+    const cum = computeDailyCumulative(cls, logs);
+    expect(cum["2026-07-07"]).toBe(cum["2026-07-06"]); // unchanged
+    expect(cum["2026-07-07"]).toBe(100);
+  });
+
+  it("a holiday doesn't move the percentage and gets no entry", () => {
+    const cls = makeClass({ holidays: [{ date: "2026-07-08", name: "Test Holiday" }] });
+    const logs: IDayLog[] = [
+      dayLog({
+        date: "2026-07-06",
+        followedWeekday: "MON",
+        periods: [p(1, "M1", "PRESENT"), p(2, "M2", "PRESENT"), p(3, "M3", "PRESENT")],
+      }),
+      dayLog({ date: "2026-07-08", followedWeekday: "WED", dayType: "HOLIDAY", periods: [] }),
+      dayLog({
+        date: "2026-07-09",
+        followedWeekday: "THU",
+        periods: [p(1, "H1", "PRESENT"), p(2, "H2", "ABSENT"), p(3, "H3", "PRESENT")],
+      }),
+    ];
+    const cum = computeDailyCumulative(cls, logs);
+    expect(cum["2026-07-08"]).toBeUndefined(); // holiday: no entry
+    expect(cum["2026-07-09"]).toBeCloseTo((5 / 6) * 100, 10); // only the two counted days
+  });
+
+  it("is order-independent (sorts chronologically before accumulating)", () => {
+    const cls = makeClass();
+    const logs: IDayLog[] = [
+      dayLog({
+        date: "2026-07-07",
+        followedWeekday: "TUE",
+        periods: [p(1, "T1", "ABSENT"), p(2, "T2", "ABSENT"), p(3, "T3", "ABSENT")],
+      }),
+      dayLog({
+        date: "2026-07-06",
+        followedWeekday: "MON",
+        periods: [p(1, "M1", "PRESENT"), p(2, "M2", "PRESENT"), p(3, "M3", "PRESENT")],
+      }),
+    ];
+    const cum = computeDailyCumulative(cls, logs);
+    expect(cum["2026-07-06"]).toBe(100); // Monday processed first despite input order
+    expect(cum["2026-07-07"]).toBe(50); // 3/6
   });
 });
 
