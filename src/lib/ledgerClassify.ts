@@ -8,7 +8,7 @@ export type LedgerDayKind =
   | { kind: "holiday"; name: string | null; filed: boolean }
   | { kind: "unfiled" }
   | { kind: "full_absent" }
-  | { kind: "normal"; present: number; absent: number; od: number; cancelled: number };
+  | { kind: "normal"; present: number; absent: number; od: number; missed: number; cancelled: number };
 
 /**
  * A DayLog, once it exists, always wins over schedule/weekend/holiday
@@ -32,8 +32,8 @@ export function classifyDay(cls: IClass, log: IDayLog | undefined, date: string)
       return { kind: "full_absent" };
     }
     const dayPeriods = cls.timetable[log.followedWeekday] ?? [];
-    const { present, absent, od, cancelled } = tallyDayPeriodsDetailed(dayPeriods, log.periods);
-    return { kind: "normal", present, absent, od, cancelled };
+    const { present, absent, od, missed, cancelled } = tallyDayPeriodsDetailed(dayPeriods, log.periods);
+    return { kind: "normal", present, absent, od, missed, cancelled };
   }
 
   const expected = getExpectedDay(cls, date);

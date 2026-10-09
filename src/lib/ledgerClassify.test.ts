@@ -71,6 +71,7 @@ describe("classifyDay", () => {
       present: 1,
       absent: 0,
       od: 0,
+      missed: 0,
       cancelled: 0,
     });
   });

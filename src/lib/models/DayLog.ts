@@ -2,7 +2,7 @@ import { Schema, model, models, type Model, type Types } from "mongoose";
 import { WEEKDAYS, type Weekday } from "@/lib/weekday";
 
 export type DayType = "NORMAL" | "HOLIDAY" | "FULL_ABSENT";
-export type PeriodStatus = "PRESENT" | "ABSENT" | "OD" | "CANCELLED";
+export type PeriodStatus = "PRESENT" | "ABSENT" | "OD" | "MISSED" | "CANCELLED";
 
 export interface IDayLogPeriod {
   periodNo: number;
@@ -23,7 +23,7 @@ const DayLogPeriodSchema = new Schema<IDayLogPeriod>(
   {
     periodNo: { type: Number, required: true },
     subjectCode: { type: String, required: true },
-    status: { type: String, enum: ["PRESENT", "ABSENT", "OD", "CANCELLED"], required: true },
+    status: { type: String, enum: ["PRESENT", "ABSENT", "OD", "MISSED", "CANCELLED"], required: true },
   },
   { _id: false }
 );

@@ -11,6 +11,7 @@ export const STATUS_LABEL: Record<PeriodStatus, string> = {
   PRESENT: "Present",
   ABSENT: "Absent",
   OD: "OD",
+  MISSED: "Missed",
   CANCELLED: "Cancelled",
 };
 
@@ -18,14 +19,21 @@ const STATUS_CLASSES: Record<PeriodStatus, string> = {
   PRESENT: "border-ink text-ink",
   ABSENT: "border-blood text-blood",
   OD: "border-brass text-brass",
+  // Counted as present officially (ink text), but something's off: a dashed
+  // blood border. The "Missed" text label carries the meaning, never colour alone.
+  MISSED: "border-dashed border-blood text-ink",
   CANCELLED: "border-ink-muted text-ink-muted",
 };
 
 export interface PeriodChipProps {
   group: PeriodGroup;
   status: PeriodStatus;
-  /** Visually (and functionally) forces the ABSENT look, e.g. during a pending FULL_ABSENT day. */
-  forcedAbsent?: boolean;
+  /**
+   * Visually (and functionally) forces a single status look across the chip,
+   * e.g. ABSENT during a pending Full Day Absent, or OD during a pending Full
+   * Day OD. The chip is non-interactive while forced.
+   */
+  forcedStatus?: PeriodStatus | null;
   onTap: () => void;
   onLongPress: () => void;
 }
@@ -36,7 +44,7 @@ function periodRangeLabel(periodNos: number[]): string {
     : `P${periodNos[0]}`;
 }
 
-export function PeriodChip({ group, status, forcedAbsent = false, onTap, onLongPress }: PeriodChipProps) {
+export function PeriodChip({ group, status, forcedStatus = null, onTap, onLongPress }: PeriodChipProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firedRef = useRef(false);
 
@@ -51,8 +59,8 @@ export function PeriodChip({ group, status, forcedAbsent = false, onTap, onLongP
     );
   }
 
-  const interactive = !forcedAbsent;
-  const effectiveStatus: PeriodStatus = forcedAbsent ? "ABSENT" : status;
+  const interactive = forcedStatus === null;
+  const effectiveStatus: PeriodStatus = forcedStatus ?? status;
 
   function clearTimer() {
     if (timerRef.current) {

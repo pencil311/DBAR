@@ -50,6 +50,7 @@ export default async function SubjectsPage() {
       name: info.name,
       occurred: stat?.occurred ?? 0,
       attended: stat?.attended ?? 0,
+      missed: stat?.missed ?? 0,
       percentage: stat?.percentage ?? 100,
     };
   });
@@ -76,7 +77,9 @@ export default async function SubjectsPage() {
       </div>
 
       <FlavorText className="text-center text-sm">
-        The county counts the total. These are the trails that got you here.
+        Overall attendance is what the county holds on you — the official record. These per-subject
+        numbers count only the classes you actually sat through, so missed periods drag a subject
+        down here without ever touching the poster.
       </FlavorText>
     </main>
   );

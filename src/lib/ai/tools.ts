@@ -62,7 +62,7 @@ export const CHAT_TOOLS = [
     function: {
       name: "get_attendance",
       description:
-        "Get the student's attendance. Returns the overall percentage and, if a subject is given, that subject's numbers. Use for any question about attendance, classes attended, or how many classes can be skipped.",
+        "Get the student's attendance. With no subject, returns the OVERALL percentage — the official figure the college holds, used for the 80% rule and bunk budget. With a subject, returns that subject's OWN percentage, which is computed differently and can legitimately be LOWER than overall. The difference is MISSED periods ('officially present but bunked'): they count as PRESENT in the overall figure but as NOT-attended for a subject. Never present a subject percentage as the student's overall/official attendance, or vice versa.",
       parameters: {
         type: "object",
         properties: {
@@ -100,7 +100,7 @@ export const CHAT_TOOLS = [
     function: {
       name: "attendance_safety",
       description:
-        "Check whether the student can skip/bunk classes while staying at or above a target attendance percentage. Returns how many more periods they can miss (0 if none), and — if already below the target — how many periods they must attend in a row to get back to safe. Use for ANY 'can I skip', 'is it safe to bunk', 'how many can I miss', or 'how many must I attend to reach X%' question.",
+        "Check whether the student can skip/bunk classes while staying at or above a target attendance percentage. Always operates on OVERALL (official) attendance — the figure the 80% rule is enforced on, in which MISSED periods count as present. Returns how many more periods they can miss (0 if none), and — if already below the target — how many periods they must attend in a row to get back to safe. Use for ANY 'can I skip', 'is it safe to bunk', 'how many can I miss', or 'how many must I attend to reach X%' question. Not for per-subject safety.",
       parameters: { 
         type: "object", 
         properties: {
@@ -118,7 +118,7 @@ export const CHAT_TOOLS = [
     function: {
       name: "project_attendance",
       description:
-        "Project the student's attendance percentage over the next N upcoming school days, assuming they are either PRESENT for all of them (attend) or ABSENT for all of them (take leave/skip). Weekends, holidays, and non-semester days are skipped automatically. Use status='absent' for 'what if I take leave / skip / bunk' questions (this LOWERS attendance) and status='present' for 'what if I attend' questions (this RAISES it). One school day ≈ a full day of classes.",
+        "Project the student's OVERALL (official) attendance percentage over the next N upcoming school days, assuming they are either PRESENT for all of them (attend) or ABSENT for all of them (take leave/skip). This is the poster/80%-rule figure, not a per-subject figure. Weekends, holidays, and non-semester days are skipped automatically. Use status='absent' for 'what if I take leave / skip / bunk' questions (this LOWERS attendance) and status='present' for 'what if I attend' questions (this RAISES it). One school day ≈ a full day of classes.",
       parameters: {
         type: "object",
         properties: {
@@ -173,10 +173,12 @@ export function runTool(ctx: ChatContext, name: string, args: Record<string, unk
       const subjectArg = typeof args.subject === "string" ? args.subject : "";
       if (!subjectArg) {
         return {
+          scope: "overall",
           overall_percentage: Number(stats.percentage.toFixed(1)),
           attended: stats.totalAttended,
           occurred: stats.totalOccurred,
           unmarked_days: stats.unmarkedDays.length,
+          note: "This is the official/overall figure used for the 80% rule. MISSED periods are counted as present here.",
         };
       }
       const subject = resolveSubject(ctx, subjectArg);
@@ -186,11 +188,14 @@ export function runTool(ctx: ChatContext, name: string, args: Record<string, unk
         return { subject: subject.name, code: subject.code, note: "No sessions recorded yet." };
       }
       return {
+        scope: "per_subject",
         subject: subject.name,
         code: subject.code,
-        percentage: Number(s.percentage.toFixed(1)),
+        subject_percentage: Number(s.percentage.toFixed(1)),
         attended: s.attended,
         occurred: s.occurred,
+        missed: s.missed,
+        note: "Per-subject figure: MISSED periods count as NOT attended here, so this can be lower than the overall/official percentage. Do not use this as the student's overall attendance.",
       };
     }
 

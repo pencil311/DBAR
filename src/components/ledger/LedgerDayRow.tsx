@@ -56,6 +56,11 @@ function RightSide({ info }: { info: LedgerDayKind }) {
         <div className="flex items-center gap-1 font-ledger text-sm">
           <span className="text-ink">P {info.present}</span>
           {info.absent > 0 && <span className="text-blood">· A {info.absent}</span>}
+          {info.missed > 0 && (
+            <span className="text-ink underline decoration-dashed decoration-blood underline-offset-2">
+              · M {info.missed}
+            </span>
+          )}
           {info.od > 0 && <span className="text-brass">· OD {info.od}</span>}
           {info.cancelled > 0 && <span className="text-ink-muted">· C {info.cancelled}</span>}
         </div>

@@ -32,13 +32,16 @@ export interface DetailedDayTally {
   present: number;
   absent: number;
   od: number;
+  missed: number;
   cancelled: number;
 }
 
 /**
- * Like tallyDayPeriods, but keeps PRESENT and OD as separate counts (rather
- * than merging OD into "present") and also reports CANCELLED — for displays
- * like the Ledger's "P 7 · A 1 · OD 1" row that want every status broken out.
+ * Like tallyDayPeriods, but keeps PRESENT, OD and MISSED as separate counts
+ * (rather than merging them into "present") and also reports CANCELLED — for
+ * displays like the Ledger's "P 7 · A 1 · M 2 · OD 1" row that want every
+ * status broken out. MISSED is a day-display count only; how it affects the
+ * attendance math (overall vs per-subject) lives in engine.ts.
  */
 export function tallyDayPeriodsDetailed(
   periods: IPeriod[],
@@ -48,13 +51,15 @@ export function tallyDayPeriodsDetailed(
   let present = 0;
   let absent = 0;
   let od = 0;
+  let missed = 0;
   let cancelled = 0;
   for (const entry of loggedPeriods) {
     if (!countableNos.has(entry.periodNo)) continue;
     if (entry.status === "PRESENT") present += 1;
     else if (entry.status === "ABSENT") absent += 1;
     else if (entry.status === "OD") od += 1;
+    else if (entry.status === "MISSED") missed += 1;
     else if (entry.status === "CANCELLED") cancelled += 1;
   }
-  return { present, absent, od, cancelled };
+  return { present, absent, od, missed, cancelled };
 }
