@@ -154,7 +154,7 @@ describe("computeStats", () => {
     const stats = computeStats(cls, logs, "2026-07-09");
     expect(stats.totalOccurred).toBe(3); // H1, H2, H3
     expect(stats.totalAttended).toBe(0);
-    expect(stats.perSubject.H1).toEqual({ occurred: 1, attended: 0, percentage: 0 });
+    expect(stats.perSubject.H1).toEqual({ occurred: 1, attended: 0, missed: 0, percentage: 0 });
   });
 
   it("a FULL_ABSENT Wednesday still excludes the non-counting mentoring slot", () => {
@@ -300,8 +300,8 @@ describe("computeStats", () => {
     expect(stats.totalOccurred).toBe(2);
     expect(stats.totalAttended).toBe(1);
     expect(stats.perSubject).toEqual({
-      W1: { occurred: 1, attended: 1, percentage: 100 },
-      W2: { occurred: 1, attended: 0, percentage: 0 },
+      W1: { occurred: 1, attended: 1, missed: 0, percentage: 100 },
+      W2: { occurred: 1, attended: 0, missed: 0, percentage: 0 },
     });
   });
 
@@ -341,6 +341,112 @@ describe("computeStats", () => {
 
     const overriddenAfterTearUp = computeStats(overriddenSaturday, [], "2026-07-11");
     expect(overriddenAfterTearUp.unmarkedDays).toContain("2026-07-11"); // override alone still expects a log
+  });
+});
+
+// ---- MISSED: the overall / per-subject split -----------------------------
+
+describe("computeStats — MISSED splits overall from per-subject", () => {
+  it("MISSED leaves OVERALL identical to PRESENT, but drops the subject like ABSENT", () => {
+    const cls = makeClass();
+    // Monday P2 (M2) is the period under test; P1/P3 held present as ballast.
+    const base = (status: PeriodStatus) =>
+      computeStats(
+        cls,
+        [
+          dayLog({
+            date: "2026-07-06",
+            followedWeekday: "MON",
+            periods: [p(1, "M1", "PRESENT"), p(2, "M2", status), p(3, "M3", "PRESENT")],
+          }),
+        ],
+        "2026-07-06"
+      );
+
+    const present = base("PRESENT");
+    const missed = base("MISSED");
+    const absent = base("ABSENT");
+
+    // Overall: MISSED == PRESENT, and strictly higher than ABSENT.
+    expect(missed.totalOccurred).toBe(present.totalOccurred);
+    expect(missed.totalAttended).toBe(present.totalAttended);
+    expect(missed.percentage).toBe(present.percentage);
+    expect(missed.percentage).toBeGreaterThan(absent.percentage);
+
+    // Per-subject M2: MISSED == ABSENT, and strictly lower than PRESENT.
+    expect(missed.perSubject.M2.percentage).toBe(absent.perSubject.M2.percentage);
+    expect(missed.perSubject.M2.attended).toBe(absent.perSubject.M2.attended);
+    expect(missed.perSubject.M2.percentage).toBeLessThan(present.perSubject.M2.percentage);
+    expect(missed.perSubject.M2).toEqual({ occurred: 1, attended: 0, missed: 1, percentage: 0 });
+  });
+
+  it("a mixed day diverges: overall stays 100% while the missed subject falls", () => {
+    const cls = makeClass();
+    const stats = computeStats(
+      cls,
+      [
+        dayLog({
+          date: "2026-07-06",
+          followedWeekday: "MON",
+          periods: [p(1, "M1", "PRESENT"), p(2, "M2", "MISSED"), p(3, "M3", "OD")],
+        }),
+      ],
+      "2026-07-06"
+    );
+    // Overall: 3 occurred, 3 attended (PRESENT + MISSED + OD) -> 100%.
+    expect(stats.totalOccurred).toBe(3);
+    expect(stats.totalAttended).toBe(3);
+    expect(stats.percentage).toBe(100);
+    // Per-subject: M2 sat through nothing.
+    expect(stats.perSubject.M1).toEqual({ occurred: 1, attended: 1, missed: 0, percentage: 100 });
+    expect(stats.perSubject.M2).toEqual({ occurred: 1, attended: 0, missed: 1, percentage: 0 });
+    expect(stats.perSubject.M3).toEqual({ occurred: 1, attended: 1, missed: 0, percentage: 100 });
+  });
+
+  it("CANCELLED is still excluded from both overall and per-subject", () => {
+    const cls = makeClass();
+    const stats = computeStats(
+      cls,
+      [
+        dayLog({
+          date: "2026-07-06",
+          followedWeekday: "MON",
+          periods: [p(1, "M1", "MISSED"), p(2, "M2", "CANCELLED"), p(3, "M3", "PRESENT")],
+        }),
+      ],
+      "2026-07-06"
+    );
+    expect(stats.totalOccurred).toBe(2); // M2 excluded
+    expect(stats.totalAttended).toBe(2); // MISSED counts as attended overall
+    expect(stats.perSubject.M2).toBeUndefined();
+    expect(stats.perSubject.M1).toEqual({ occurred: 1, attended: 0, missed: 1, percentage: 0 });
+  });
+});
+
+describe("honorScore — MISSED does not cost honor", () => {
+  it("a day of all-MISSED periods is clean (no honor lost)", () => {
+    const allMissed = honorScore(
+      [
+        dayLog({
+          date: "2026-07-06",
+          followedWeekday: "MON",
+          periods: [p(1, "M1", "MISSED"), p(2, "M2", "MISSED"), p(3, "M3", "MISSED")],
+        }),
+      ],
+      "2026-07-06"
+    );
+    const allPresent = honorScore(
+      [
+        dayLog({
+          date: "2026-07-06",
+          followedWeekday: "MON",
+          periods: [p(1, "M1", "PRESENT"), p(2, "M2", "PRESENT"), p(3, "M3", "PRESENT")],
+        }),
+      ],
+      "2026-07-06"
+    );
+    expect(allMissed).toBe(allPresent); // both +3 clean days
+    expect(allMissed).toBe(53);
   });
 });
 

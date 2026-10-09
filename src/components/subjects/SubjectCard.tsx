@@ -8,10 +8,11 @@ export interface SubjectCardProps {
   name: string;
   occurred: number;
   attended: number;
+  missed: number;
   percentage: number;
 }
 
-export function SubjectCard({ code, name, occurred, attended, percentage }: SubjectCardProps) {
+export function SubjectCard({ code, name, occurred, attended, missed, percentage }: SubjectCardProps) {
   if (occurred === 0) {
     return (
       <PosterFrame variant="paper-dark">
@@ -48,6 +49,15 @@ export function SubjectCard({ code, name, occurred, attended, percentage }: Subj
         </div>
         <p className="font-ledger text-sm text-ink-muted">
           {attended} of {occurred} periods answered
+          {missed > 0 && (
+            <>
+              {" "}
+              ·{" "}
+              <span className="text-ink underline decoration-dashed decoration-blood underline-offset-2">
+                {missed} missed
+              </span>
+            </>
+          )}
         </p>
         <MeterTrack percent={percentage} colorClass={danger ? "bg-blood" : "bg-lawful"} />
       </div>

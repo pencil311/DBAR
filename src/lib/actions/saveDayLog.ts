@@ -15,6 +15,7 @@ const ALLOWED_STATUSES: ReadonlySet<PeriodStatus> = new Set<PeriodStatus>([
   "PRESENT",
   "ABSENT",
   "OD",
+  "MISSED",
   "CANCELLED",
 ]);
 const ALLOWED_DAY_TYPES: ReadonlySet<DayType> = new Set<DayType>(["NORMAL", "HOLIDAY", "FULL_ABSENT"]);

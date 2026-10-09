@@ -6,6 +6,8 @@ import { addDays, daysBetween, enumerateDates } from "@/lib/dates";
 export interface SubjectStat {
   occurred: number;
   attended: number;
+  /** Periods marked MISSED — counted as not-attended here (see the table below). */
+  missed: number;
   percentage: number;
 }
 
@@ -26,52 +28,91 @@ function percentageOf(attended: number, occurred: number): number {
  * (for its timetable/holidays/calendar) and the user's day logs, returns
  * everything the UI needs to render stats. `percentage` is a raw float;
  * round it only where it's displayed.
+ *
+ * MISSED means "officially marked present, but I bunked the class", which
+ * splits overall attendance from per-subject attendance. Each status maps to
+ * an effect on (overall totals, per-subject totals):
+ *
+ *   PRESENT   → (occurred+1, attended+1) | (occurred+1, attended+1)
+ *   OD        → (occurred+1, attended+1) | (occurred+1, attended+1)
+ *   MISSED    → (occurred+1, attended+1) | (occurred+1, attended+0, missed+1)
+ *   ABSENT    → (occurred+1, attended+0) | (occurred+1, attended+0)
+ *   CANCELLED → excluded from both       | excluded from both
+ *
+ * Overall (the poster, the 80% threshold, bunk budget, honor) is what the
+ * college holds on you, so MISSED counts exactly like PRESENT there. Per-
+ * subject (the Docket) reflects the classes you actually sat through, so MISSED
+ * counts exactly like ABSENT. CANCELLED is the only status excluded from
+ * either denominator. The two are computed in SEPARATE passes with SEPARATE
+ * accumulators below — they must never share a counter, so that marking a
+ * period MISSED can move a subject's number without ever touching the poster.
  */
 export function computeStats(cls: IClass, dayLogs: IDayLog[], asOfDate: string): Stats {
+  const timetableFor = (log: IDayLog) => cls.timetable[log.followedWeekday] ?? [];
+  const inRange = (log: IDayLog) => log.date <= asOfDate && log.dayType !== "HOLIDAY";
+
+  // ---- Pass 1: OVERALL totals (MISSED counts as attended, like PRESENT) ----
   let totalOccurred = 0;
   let totalAttended = 0;
-  const perSubjectAcc: Record<string, { occurred: number; attended: number }> = {};
-
-  function addSubject(code: string, attended: boolean) {
-    const entry = perSubjectAcc[code] ?? { occurred: 0, attended: 0 };
-    entry.occurred += 1;
-    if (attended) entry.attended += 1;
-    perSubjectAcc[code] = entry;
-  }
-
   for (const log of dayLogs) {
-    if (log.date > asOfDate) continue;
-    if (log.dayType === "HOLIDAY") continue;
-
-    const timetablePeriods = cls.timetable[log.followedWeekday] ?? [];
+    if (!inRange(log)) continue;
+    const timetablePeriods = timetableFor(log);
 
     if (log.dayType === "FULL_ABSENT") {
       for (const p of timetablePeriods) {
         if (!p.countsForAttendance) continue;
         totalOccurred += 1;
-        addSubject(p.subjectCode, false);
       }
       continue;
     }
 
     const periodMeta = new Map(timetablePeriods.map((p) => [p.periodNo, p]));
-
     for (const entry of log.periods) {
       if (entry.status === "CANCELLED") continue;
-
       const meta = periodMeta.get(entry.periodNo);
       if (meta && !meta.countsForAttendance) continue;
-
-      const attended = entry.status === "PRESENT" || entry.status === "OD";
       totalOccurred += 1;
-      if (attended) totalAttended += 1;
-      addSubject(meta?.subjectCode ?? entry.subjectCode, attended);
+      if (entry.status === "PRESENT" || entry.status === "OD" || entry.status === "MISSED") {
+        totalAttended += 1;
+      }
+    }
+  }
+
+  // ---- Pass 2: PER-SUBJECT totals (MISSED counts as not-attended, like ABSENT) ----
+  const perSubjectAcc: Record<string, { occurred: number; attended: number; missed: number }> = {};
+  function addSubject(code: string, attended: boolean, missed: boolean) {
+    const entry = perSubjectAcc[code] ?? { occurred: 0, attended: 0, missed: 0 };
+    entry.occurred += 1;
+    if (attended) entry.attended += 1;
+    if (missed) entry.missed += 1;
+    perSubjectAcc[code] = entry;
+  }
+  for (const log of dayLogs) {
+    if (!inRange(log)) continue;
+    const timetablePeriods = timetableFor(log);
+
+    if (log.dayType === "FULL_ABSENT") {
+      for (const p of timetablePeriods) {
+        if (!p.countsForAttendance) continue;
+        addSubject(p.subjectCode, false, false);
+      }
+      continue;
+    }
+
+    const periodMeta = new Map(timetablePeriods.map((p) => [p.periodNo, p]));
+    for (const entry of log.periods) {
+      if (entry.status === "CANCELLED") continue;
+      const meta = periodMeta.get(entry.periodNo);
+      if (meta && !meta.countsForAttendance) continue;
+      const attended = entry.status === "PRESENT" || entry.status === "OD";
+      const missed = entry.status === "MISSED";
+      addSubject(meta?.subjectCode ?? entry.subjectCode, attended, missed);
     }
   }
 
   const perSubject: Record<string, SubjectStat> = {};
-  for (const [code, { occurred, attended }] of Object.entries(perSubjectAcc)) {
-    perSubject[code] = { occurred, attended, percentage: percentageOf(attended, occurred) };
+  for (const [code, { occurred, attended, missed }] of Object.entries(perSubjectAcc)) {
+    perSubject[code] = { occurred, attended, missed, percentage: percentageOf(attended, occurred) };
   }
 
   const loggedDates = new Set(dayLogs.map((l) => l.date));
@@ -129,6 +170,10 @@ export function posterState(percentage: number): PosterState {
  * period is -5, OD counts as present, and days with no log (holidays,
  * weekends, or simply not logged) are skipped entirely. Clamped to [0, 100].
  * This formula is a first pass and may get tuned later.
+ *
+ * Honor is an OVERALL (poster-side) signal, so MISSED is treated as present:
+ * it is not an ABSENT, so a day containing only PRESENT/OD/MISSED/CANCELLED is
+ * a clean day and costs no honor.
  */
 export function honorScore(dayLogs: IDayLog[], asOfDate: string): number {
   const windowStart = addDays(asOfDate, -29);

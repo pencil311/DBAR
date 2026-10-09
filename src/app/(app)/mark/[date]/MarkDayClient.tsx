@@ -32,7 +32,13 @@ interface MarkDayClientProps {
 type Mode = "noschool" | "picking" | "form" | "marked";
 
 const HINT_KEY = "dbar.mark.longPressHintDismissed";
-type ShortcutType = "FULL_ABSENT" | "HOLIDAY";
+/**
+ * The three mutually-exclusive whole-day shortcuts. FULL_ABSENT and HOLIDAY
+ * are genuine day types; FULL_DAY_OD is sugar for a NORMAL day whose every
+ * countable period is OD (it files as NORMAL — there is no FULL_DAY_OD day
+ * type on the server).
+ */
+type Shortcut = "FULL_ABSENT" | "HOLIDAY" | "FULL_DAY_OD";
 
 function nextTapStatus(status: PeriodStatus): PeriodStatus {
   switch (status) {
@@ -41,6 +47,8 @@ function nextTapStatus(status: PeriodStatus): PeriodStatus {
     case "ABSENT":
       return "OD";
     case "OD":
+      return "MISSED";
+    case "MISSED":
       return "PRESENT";
     case "CANCELLED":
       return "PRESENT";
@@ -88,8 +96,12 @@ export function MarkDayClient({
   const [statuses, setStatuses] = useState<Record<number, PeriodStatus>>(() =>
     defaultStatuses(activePeriods, existingLog)
   );
-  const [pendingDayType, setPendingDayType] = useState<DayType>(
-    existingLog && existingLog.dayType !== "NORMAL" ? existingLog.dayType : "NORMAL"
+  const [pendingShortcut, setPendingShortcut] = useState<Shortcut | null>(
+    existingLog?.dayType === "FULL_ABSENT"
+      ? "FULL_ABSENT"
+      : existingLog?.dayType === "HOLIDAY"
+        ? "HOLIDAY"
+        : null
   );
   const [savedSummary, setSavedSummary] = useState<ExistingLogSummary | null>(existingLog);
   const [hintDismissed, setHintDismissed] = useState(true);
@@ -103,6 +115,16 @@ export function MarkDayClient({
   const [revertNote, setRevertNote] = useState<string | null>(null);
 
   const groups = useMemo(() => groupPeriods(activePeriods), [activePeriods]);
+
+  // A whole-day shortcut suspends per-period editing. FULL_DAY_OD and
+  // FULL_ABSENT force every chip to one status for display; HOLIDAY hides the
+  // chips entirely.
+  const isNormalEditing = pendingShortcut === null;
+  const forcedChipStatus: PeriodStatus | null =
+    pendingShortcut === "FULL_ABSENT" ? "ABSENT" : pendingShortcut === "FULL_DAY_OD" ? "OD" : null;
+  const hasMissed =
+    isNormalEditing &&
+    activePeriods.some((p) => p.countsForAttendance && statuses[p.periodNo] === "MISSED");
 
   useEffect(() => {
     if (!existingLog) {
@@ -140,7 +162,7 @@ export function MarkDayClient({
   }
 
   function cycleStatus(group: PeriodGroup) {
-    if (pendingDayType !== "NORMAL") return;
+    if (!isNormalEditing) return;
     const periodNos = group.periodNos;
     setStatuses((prev) => {
       const cycled = nextTapStatus(prev[periodNos[0]]);
@@ -152,7 +174,7 @@ export function MarkDayClient({
   }
 
   function toggleCancelled(group: PeriodGroup) {
-    if (pendingDayType !== "NORMAL") return;
+    if (!isNormalEditing) return;
     const periodNos = group.periodNos;
     setStatuses((prev) => {
       const toggled = prev[periodNos[0]] === "CANCELLED" ? "PRESENT" : "CANCELLED";
@@ -163,13 +185,31 @@ export function MarkDayClient({
     });
   }
 
-  function toggleShortcut(type: ShortcutType) {
-    setPendingDayType((prev) => (prev === type ? "NORMAL" : type));
+  function toggleShortcut(type: Shortcut) {
+    setPendingShortcut((prev) => {
+      const next = prev === type ? null : type;
+      setAnnouncement(
+        next === null
+          ? "Day shortcut cleared"
+          : next === "FULL_ABSENT"
+            ? "Whole day marked absent"
+            : next === "HOLIDAY"
+              ? "Whole day marked holiday"
+              : "Whole day marked OD"
+      );
+      return next;
+    });
   }
 
   function handleEdit() {
     setStatuses(defaultStatuses(activePeriods, savedSummary));
-    setPendingDayType(savedSummary && savedSummary.dayType !== "NORMAL" ? savedSummary.dayType : "NORMAL");
+    setPendingShortcut(
+      savedSummary?.dayType === "FULL_ABSENT"
+        ? "FULL_ABSENT"
+        : savedSummary?.dayType === "HOLIDAY"
+          ? "HOLIDAY"
+          : null
+    );
     setError(null);
     setRevertNote(null);
     setMode("form");
@@ -178,7 +218,7 @@ export function MarkDayClient({
   function handlePickWeekday(weekday: Weekday) {
     setWorkingDayWeekday(weekday);
     setStatuses(defaultStatuses(timetable[weekday], null));
-    setPendingDayType("NORMAL");
+    setPendingShortcut(null);
     setError(null);
     setRevertNote(null);
     setMode("form");
@@ -186,7 +226,7 @@ export function MarkDayClient({
 
   function handleCancelPick() {
     setWorkingDayWeekday(null);
-    setPendingDayType("NORMAL");
+    setPendingShortcut(null);
     setError(null);
     setRevertNote(null);
     setMode("noschool");
@@ -204,7 +244,7 @@ export function MarkDayClient({
 
         if (result.overrideRemoved) {
           setWorkingDayWeekday(null);
-          setPendingDayType("NORMAL");
+          setPendingShortcut(null);
           setMode("noschool");
         } else {
           // The outfit's shared calendar still says this day happened (someone
@@ -213,7 +253,7 @@ export function MarkDayClient({
           const nextWeekday = isNonSchoolDay ? (expected?.followedWeekday ?? null) : null;
           setWorkingDayWeekday(nextWeekday);
           setStatuses(defaultStatuses(expected?.periods ?? [], null));
-          setPendingDayType("NORMAL");
+          setPendingShortcut(null);
           setMode(expected ? "form" : "noschool");
           setRevertNote(
             "Your filing is torn up — but the outfit's records show this day happened, so it stays on the calendar."
@@ -238,7 +278,7 @@ export function MarkDayClient({
         setPendingWire(false);
         setWorkingDayWeekday(nextWeekday);
         setStatuses(defaultStatuses(expected?.periods ?? [], null));
-        setPendingDayType("NORMAL");
+        setPendingShortcut(null);
         setMode(expected ? "form" : "noschool");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not tear up the filing. Try again.");
@@ -249,16 +289,35 @@ export function MarkDayClient({
   function handleDone() {
     setError(null);
     setRevertNote(null);
+
+    // FULL_DAY_OD is not a day type — it files as a NORMAL day whose every
+    // period is OD. HOLIDAY and FULL_ABSENT file with no per-period data.
+    const effectiveDayType: DayType =
+      pendingShortcut === "HOLIDAY"
+        ? "HOLIDAY"
+        : pendingShortcut === "FULL_ABSENT"
+          ? "FULL_ABSENT"
+          : "NORMAL";
+
     const payloadPeriods =
-      pendingDayType === "NORMAL"
-        ? activePeriods.map((period) => ({
-            periodNo: period.periodNo,
-            status: statuses[period.periodNo] ?? "PRESENT",
-          }))
-        : [];
+      effectiveDayType !== "NORMAL"
+        ? []
+        : pendingShortcut === "FULL_DAY_OD"
+          ? activePeriods.map((period) => ({
+              periodNo: period.periodNo,
+              // Only countable periods become OD; a not-counted slot keeps its
+              // default (it never affects the math either way).
+              status: period.countsForAttendance
+                ? ("OD" as PeriodStatus)
+                : (statuses[period.periodNo] ?? "PRESENT"),
+            }))
+          : activePeriods.map((period) => ({
+              periodNo: period.periodNo,
+              status: statuses[period.periodNo] ?? "PRESENT",
+            }));
 
     const payload: SaveDayLogPayload = {
-      dayType: pendingDayType,
+      dayType: effectiveDayType,
       periods: payloadPeriods,
       ...(workingDayWeekday ? { overrideWeekday: workingDayWeekday } : {}),
     };
@@ -267,7 +326,7 @@ export function MarkDayClient({
     startSaving(async () => {
       try {
         await saveDayLog(date, payload);
-        setSavedSummary({ dayType: pendingDayType, followedWeekday: filedFollowedWeekday, periods: payloadPeriods });
+        setSavedSummary({ dayType: effectiveDayType, followedWeekday: filedFollowedWeekday, periods: payloadPeriods });
         setPendingWire(false);
         setMode("marked");
       } catch (err) {
@@ -275,7 +334,7 @@ export function MarkDayClient({
         if (isNetworkError) {
           queueFiling(date, payload);
           setSavedSummary({
-            dayType: pendingDayType,
+            dayType: effectiveDayType,
             followedWeekday: filedFollowedWeekday,
             periods: payloadPeriods,
           });
@@ -464,7 +523,7 @@ export function MarkDayClient({
         </div>
       )}
 
-      {pendingDayType === "HOLIDAY" ? (
+      {pendingShortcut === "HOLIDAY" ? (
         <PosterFrame variant="paper-dark">
           <FlavorText className="text-center">
             Marking this whole day as a holiday. No periods will be logged.
@@ -477,7 +536,7 @@ export function MarkDayClient({
               key={group.periodNos.join("-")}
               group={group}
               status={statuses[group.periodNos[0]]}
-              forcedAbsent={pendingDayType === "FULL_ABSENT"}
+              forcedStatus={forcedChipStatus}
               onTap={() => cycleStatus(group)}
               onLongPress={() => toggleCancelled(group)}
             />
@@ -485,23 +544,42 @@ export function MarkDayClient({
         </div>
       )}
 
+      {hasMissed && (
+        <div className="border border-dashed border-blood bg-paper-dark px-3 py-2">
+          <FlavorText className="text-sm">
+            Missed periods don&rsquo;t dent your poster — the county still has you down as present.
+            It&rsquo;s the Docket that remembers. Mark it Absent if you want it counting against you.
+          </FlavorText>
+        </div>
+      )}
+
       {error && <FlavorText className="text-center text-blood">{error}</FlavorText>}
 
-      <div className="flex gap-3">
-        <button type="button" onClick={() => toggleShortcut("FULL_ABSENT")} className="flex-1">
+      <div className="flex flex-col gap-3">
+        <div className="flex gap-3">
+          <button type="button" onClick={() => toggleShortcut("FULL_ABSENT")} className="flex-1">
+            <Stamp
+              variant={pendingShortcut === "FULL_ABSENT" ? "blood" : "ink"}
+              className="block w-full text-center text-xs"
+            >
+              Full Day Absent
+            </Stamp>
+          </button>
+          <button type="button" onClick={() => toggleShortcut("HOLIDAY")} className="flex-1">
+            <Stamp
+              variant={pendingShortcut === "HOLIDAY" ? "brass" : "ink"}
+              className="block w-full text-center text-xs"
+            >
+              Holiday
+            </Stamp>
+          </button>
+        </div>
+        <button type="button" onClick={() => toggleShortcut("FULL_DAY_OD")} className="w-full">
           <Stamp
-            variant={pendingDayType === "FULL_ABSENT" ? "blood" : "ink"}
+            variant={pendingShortcut === "FULL_DAY_OD" ? "brass" : "ink"}
             className="block w-full text-center text-xs"
           >
-            Full Day Absent
-          </Stamp>
-        </button>
-        <button type="button" onClick={() => toggleShortcut("HOLIDAY")} className="flex-1">
-          <Stamp
-            variant={pendingDayType === "HOLIDAY" ? "brass" : "ink"}
-            className="block w-full text-center text-xs"
-          >
-            Holiday
+            Full Day OD
           </Stamp>
         </button>
       </div>

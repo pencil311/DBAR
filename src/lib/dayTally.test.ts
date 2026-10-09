@@ -41,7 +41,7 @@ describe("tallyDayPeriods", () => {
 });
 
 describe("tallyDayPeriodsDetailed", () => {
-  it("keeps PRESENT, ABSENT, OD, and CANCELLED as separate counts", () => {
+  it("keeps PRESENT, ABSENT, OD, MISSED, and CANCELLED as separate counts", () => {
     const logged = [
       { periodNo: 1, status: "PRESENT" as const },
       { periodNo: 2, status: "OD" as const },
@@ -51,16 +51,33 @@ describe("tallyDayPeriodsDetailed", () => {
       present: 1,
       absent: 0,
       od: 1,
+      missed: 0,
       cancelled: 1,
     });
   });
 
+  it("counts MISSED periods on their own line (P 1 · A 1 · M 1 style)", () => {
+    const logged = [
+      { periodNo: 1, status: "PRESENT" as const },
+      { periodNo: 2, status: "ABSENT" as const },
+      { periodNo: 3, status: "MISSED" as const },
+    ];
+    expect(tallyDayPeriodsDetailed(PERIODS, logged)).toEqual({
+      present: 1,
+      absent: 1,
+      od: 0,
+      missed: 1,
+      cancelled: 0,
+    });
+  });
+
   it("excludes non-counting periods regardless of status", () => {
-    const logged = [{ periodNo: 4, status: "ABSENT" as const }];
+    const logged = [{ periodNo: 4, status: "MISSED" as const }];
     expect(tallyDayPeriodsDetailed(PERIODS, logged)).toEqual({
       present: 0,
       absent: 0,
       od: 0,
+      missed: 0,
       cancelled: 0,
     });
   });
@@ -70,6 +87,7 @@ describe("tallyDayPeriodsDetailed", () => {
       present: 0,
       absent: 0,
       od: 0,
+      missed: 0,
       cancelled: 0,
     });
   });
