@@ -221,3 +221,130 @@ export async function deleteDayLog(date: string): Promise<void> {
 
   revalidatePath(`/mark/${date}`);
 }
+
+// ---- Bulk filing from the Ledger -----------------------------------------
+
+/** Statuses the bulk Ledger action accepts — a whole day of one status. */
+const BULK_STATUSES: ReadonlySet<BulkDayStatus> = new Set<BulkDayStatus>(["PRESENT", "ABSENT", "OD"]);
+const MAX_BULK_DAYS = 10;
+
+export type BulkDayStatus = "PRESENT" | "ABSENT" | "OD";
+
+export interface BulkDayInput {
+  date: string;
+  status: BulkDayStatus;
+}
+
+export interface BulkSaveResult {
+  /** Dates that were newly filed. */
+  succeeded: string[];
+  /** Dates that could not be filed, with a human-readable reason each. */
+  failed: { date: string; error: string }[];
+}
+
+/**
+ * Files a whole day per entry from the Ledger's bulk-select mode: for each
+ * eligible date, upserts a NORMAL DayLog whose every countable period is set
+ * to the chosen status (MISSED is deliberately not offered here).
+ *
+ * Everything the client claims is re-checked server-side — this never trusts
+ * the client's view of eligibility. A date must still be a school day (or a
+ * day already carrying a dayOrderOverride) AND must not already have a filing.
+ * The not-already-filed check is enforced atomically with $setOnInsert, so a
+ * day another device filed in the meantime fails cleanly instead of being
+ * overwritten. Failures are collected per-date and returned, never silent.
+ */
+export async function bulkSaveDayLogs(days: BulkDayInput[]): Promise<BulkSaveResult> {
+  const session = await getServerAuthSession();
+  if (!session?.user) {
+    throw new Error("Not authenticated");
+  }
+
+  const classId = session.user.classId;
+  if (!classId) {
+    throw new Error("No class assigned");
+  }
+
+  if (days.length > MAX_BULK_DAYS) {
+    throw new Error(`Too many days in one batch (max ${MAX_BULK_DAYS}).`);
+  }
+
+  await connectToDatabase();
+  const cls = await Class.findById(classId).lean();
+  if (!cls) {
+    throw new Error("Class not found");
+  }
+
+  const succeeded: string[] = [];
+  const failed: { date: string; error: string }[] = [];
+  const seen = new Set<string>();
+
+  for (const day of days) {
+    const { date, status } = day;
+
+    if (seen.has(date)) continue; // ignore accidental duplicates in one batch
+    seen.add(date);
+
+    if (!isValidDateString(date)) {
+      failed.push({ date, error: "Not a valid date." });
+      continue;
+    }
+    if (!BULK_STATUSES.has(status)) {
+      failed.push({ date, error: "Not a status you can bulk-file." });
+      continue;
+    }
+    if (!isSemesterDay(cls, date)) {
+      failed.push({ date, error: "Outside the semester." });
+      continue;
+    }
+
+    // Eligible only if a timetable genuinely governs the date (a school day,
+    // or a weekend/holiday already overridden to a working day). We never
+    // create a new override here — bulk filing only fills days court was
+    // already in session for.
+    const expected = getExpectedDay(cls, date);
+    if (!expected) {
+      failed.push({ date, error: "No court in session — open it from the mark screen first." });
+      continue;
+    }
+
+    const finalPeriods = expected.periods.map((period) => ({
+      periodNo: period.periodNo,
+      subjectCode: period.subjectCode,
+      // Only countable periods carry the chosen status; a not-counted slot is
+      // stored PRESENT (it never affects the math either way).
+      status: (period.countsForAttendance ? status : "PRESENT") as PeriodStatus,
+    }));
+
+    // Atomic "insert only if not already filed": $setOnInsert never touches an
+    // existing doc, so a day filed elsewhere since the client loaded fails here.
+    const res = await DayLog.updateOne(
+      { userId: session.user.id, date },
+      {
+        $setOnInsert: {
+          userId: session.user.id,
+          date,
+          dayType: "NORMAL",
+          followedWeekday: expected.followedWeekday,
+          periods: finalPeriods,
+          lockedAt: new Date(),
+        },
+      },
+      { upsert: true }
+    );
+
+    if (res.upsertedCount && res.upsertedCount > 0) {
+      succeeded.push(date);
+    } else {
+      failed.push({ date, error: "Already filed — edit it from its mark screen." });
+    }
+  }
+
+  if (succeeded.length > 0) {
+    revalidatePath("/ledger");
+    revalidatePath("/"); // the poster reads the same stats
+    for (const date of succeeded) revalidatePath(`/mark/${date}`);
+  }
+
+  return { succeeded, failed };
+}
